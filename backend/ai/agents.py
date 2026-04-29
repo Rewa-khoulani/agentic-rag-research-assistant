@@ -174,6 +174,16 @@ class IntentClassification(BaseModel):
     page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
 
 def classifier_node(state: TeamState):
+     # إذا كانت هناك نية مجبرة (من الواجهة)، استخدمها فوراً
+    forced = state.get("forced_intent")
+    if forced:
+        logger.info(f"🚀 Forced intent: {forced} (by user filter selection)")
+        print(f"\n🚀 [Classifier] forced intent = {forced}")
+        return {
+            "next_step": forced,
+            "section_filter": state.get("section_filter"),
+            "page_hint": state.get("page_hint")
+        }
     messages = state.get("messages", [])
     if not messages:
         return {"next_step": "chat"}

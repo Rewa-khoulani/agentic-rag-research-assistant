@@ -78,17 +78,38 @@ If the answer cannot be found, say 'Not found in the paper.' Cite page numbers w
 # Provide a clear, detailed explanation of that paragraph in simple terms. Include the key points and their significance."""),
 #     ("user", "Paragraph text:\n{context}\n\nUser question: {query}")
 # ])
+# locate_paragraph_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """You are an expert research assistant. You will receive a paragraph from a paper and a user question.
+# Your task is to answer the user's question using ONLY that paragraph. You must adapt the structure and style of your answer to the user's specific request:
+
+# - **If the user asks for an explanation**: Provide a detailed breakdown. Use bullet points (•) for each key point. Explain the meaning of complex phrases, the implications of the findings, and how the ideas connect. Do not just rephrase.
+
+# - **If the user asks for a summary**: Write one or two concise paragraphs that capture the absolute core message. Preserve all named entities (model names, datasets, metrics). Remove only redundant examples.
+
+# - **If the user asks a specific factual question** (e.g., "What score did X achieve?", "Which technique was used?"): Answer in a single clear sentence. Directly quote the relevant part of the paragraph as evidence.
+
+# Whichever style you use, never add information from outside the provided paragraph."""),
+#     ("user", "Paragraph:\n{context}\n\nUser Question: {query}")
+# ])
 locate_paragraph_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. You will receive a paragraph from a paper and a user question.
-Your task is to answer the user's question using ONLY that paragraph. You must adapt the structure and style of your answer to the user's specific request:
 
-- **If the user asks for an explanation**: Provide a detailed breakdown. Use bullet points (•) for each key point. Explain the meaning of complex phrases, the implications of the findings, and how the ideas connect. Do not just rephrase.
+**CRITICAL INSTRUCTIONS**:
+- Analyze the user's question VERY carefully.
+- If the question asks for a **specific fact, number, technique name, or definition**, answer ONLY with that fact, quoted directly from the text.
+- If the question asks for an **explanation** (e.g., "explain", "what does this mean", "help me understand", "break down"):
+  Your response MUST follow this EXACT structure:
+  
+  1. **Main Thesis**: ONE sentence stating what the paragraph is about.
+  2. **Key Points** (MANDATORY bullet list):
+     • [Point 1]: State a key idea and explain its significance.
+     • [Point 2]: State another key idea and explain its significance.
+     • [Continue as needed]
+  3. **Connections**: ONE short sentence explaining how these points relate to each other.
+  
+- If the question asks for a **summary** (e.g., "summarize", "give me a summary"), write ONE short paragraph capturing the core message.
 
-- **If the user asks for a summary**: Write one or two concise paragraphs that capture the absolute core message. Preserve all named entities (model names, datasets, metrics). Remove only redundant examples.
-
-- **If the user asks a specific factual question** (e.g., "What score did X achieve?", "Which technique was used?"): Answer in a single clear sentence. Directly quote the relevant part of the paragraph as evidence.
-
-Whichever style you use, never add information from outside the provided paragraph."""),
+DO NOT write a general overview. NEVER just rephrase the entire paragraph. If the user asks for an explanation, you MUST use the structure above."""),
     ("user", "Paragraph:\n{context}\n\nUser Question: {query}")
 ])
 

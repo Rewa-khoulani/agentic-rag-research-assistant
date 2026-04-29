@@ -24,3 +24,4 @@ class TeamState(TypedDict):
     page_hint: Optional[int]
     paper_loaded: bool
     final_response: Optional[str]
+    forced_intent: Optional[str] #  للقسم أو الفقرة المحددةclassifier لتجاوز

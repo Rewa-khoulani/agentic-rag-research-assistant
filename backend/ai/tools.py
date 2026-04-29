@@ -136,9 +136,16 @@ def _search_paper_raw(query: str, section_filter: str = None, page_hint: int = N
     """استرجاع أولي من الورقة بدون Rerank."""
     results = retriever.retrieve(query, top_k=top_k, section_filter=section_filter, page_filter=page_hint)
     if not results["documents"] or not results["documents"][0]:
+        print(f"⚠️ [_search_paper_raw] لا توجد نتائج لـ query='{query[:80]}...', section='{section_filter}', page='{page_hint}'")
         return ""
     docs = results["documents"][0]
     metadatas = results["metadatas"][0]
+    print(f"\n📋 [_search_paper_raw] استرجاع {len(docs)} قطعة:")
+    for i, (doc, meta) in enumerate(zip(docs, metadatas)):
+        section = meta.get("section", "?")
+        page = meta.get("page", "?")
+        snippet = doc[:120].replace('\n', ' ')
+        print(f"   {i+1}. page={page}, section='{section}' → {snippet}...")
     context = "\n\n".join([
         f"[Page {m.get('page', '?')} | {m.get('section', 'General')}]\n{t}"
         for t, m in zip(docs, metadatas)

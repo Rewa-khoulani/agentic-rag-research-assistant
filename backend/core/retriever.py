@@ -53,13 +53,18 @@ class Retriever:
             where_filter["page"] = str(page_filter)
         if not where_filter:
             where_filter = None
+        print(f"\n🔎 [retrieve] query='{query[:80]}...', section_filter='{section_filter}', page_filter='{page_filter}', where={where_filter}")
 
         results = self.collection.query(
             query_embeddings=[query_embedding],
             n_results=top_k,
             where=where_filter
         )
-        
+        if results["documents"] and results["documents"][0]:
+            for i, (doc, meta) in enumerate(zip(results["documents"][0], results["metadatas"][0])):
+                print(f"   → قطعة {i+1}: page={meta.get('page', '?')}, section='{meta.get('section', '?')}'")
+        else:
+            print("   ⚠️ لا توجد نتائج.")
         return results
 
     # def rerank(self, query, initial_results, top_k=5):

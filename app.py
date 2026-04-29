@@ -275,9 +275,12 @@ if st.session_state.paper_processed:
                         "paper_loaded": True,
                         "section_filter": st.session_state.section_filter,
                         "page_hint": st.session_state.page_filter
+                        
                     }
-
+                    
                     config = {"configurable": {"thread_id": "session1"}}
+                    if st.session_state.section_filter or st.session_state.page_filter:
+                        input_state["forced_intent"] = "locate_paragraph"
                     result = master_graph.invoke(input_state, config)
 
                     answer = result.get("final_response", "Sorry, I could not generate an answer.")
