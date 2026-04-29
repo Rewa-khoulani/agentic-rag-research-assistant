@@ -6,7 +6,7 @@ from backend.ai.agents import (
     classifier_node, chatbot_node, ask_paper_node,
     locate_paragraph_node, full_summary_node, external_concept_node, critic_node
 )
-
+from langgraph.checkpoint.memory import MemorySaver
 # ------------------- Sub-graph for Paper Processing -------------------
 def build_paper_graph(intent: str):
     workflow = StateGraph(PaperState)
@@ -18,7 +18,9 @@ def build_paper_graph(intent: str):
         workflow.add_edge("ask_paper", "critic")
         workflow.add_conditional_edges(
             "critic",
-            lambda s: END if s.get("final_answer") else "ask_paper",
+            # lambda s: END if s.get("final_answer") else "ask_paper",
+            lambda s: END if s.get("final_answer") or s.get("revision_number", 0) >= 2 else "ask_paper",
+            
             {"ask_paper": "ask_paper", END: END}
         )
     elif intent == "locate_paragraph":
@@ -53,14 +55,14 @@ def build_paper_graph(intent: str):
         )
     else:
         # fallback
-        workflow.add_node("paper_qa", paper_qa_node)
+        workflow.add_node("ask_paper", ask_paper_node)
         workflow.add_node("critic", critic_node)
-        workflow.set_entry_point("paper_qa")
-        workflow.add_edge("paper_qa", "critic")
+        workflow.set_entry_point("ask_paper")
+        workflow.add_edge("ask_paper", "critic")
         workflow.add_conditional_edges(
             "critic",
-            lambda s: END if s.get("final_answer") else "paper_qa",
-            {"paper_qa": "paper_qa", END: END}
+            lambda s: END if s.get("final_answer") else "ask_paper",
+            {"ask_paper": "ask_paper", END: END}
         )
 
     return workflow.compile(checkpointer=InMemorySaver())
@@ -110,7 +112,7 @@ def build_master_graph():
 
     workflow.add_edge("chatbot", END)
     workflow.add_edge("paper_team", END)
-
-    return workflow.compile(checkpointer=InMemorySaver())
-
+    # return workflow.compile(checkpointer=InMemorySaver())
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)
 master_graph = build_master_graph()

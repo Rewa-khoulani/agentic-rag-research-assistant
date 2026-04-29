@@ -157,7 +157,8 @@ from backend.core.llm import llm
 from backend.ai.state import PaperState, TeamState
 from backend.ai.prompts import (
     classifier_prompt, ask_paper_prompt, locate_paragraph_prompt,
-    full_summary_prompt, web_merge_prompt, critic_prompt
+    full_summary_prompt,
+     web_merge_prompt, critic_prompt
 )
 
 from backend.core.retriever import retriever
@@ -191,8 +192,14 @@ def classifier_node(state: TeamState):
     last_msg = messages[-1]
     content = last_msg.content if hasattr(last_msg, 'content') else str(last_msg)
 
+    # structured_llm = llm.with_structured_output(IntentClassification)
+    # formatted = classifier_prompt.format_messages(input=content)
     structured_llm = llm.with_structured_output(IntentClassification)
-    formatted = classifier_prompt.format_messages(input=content)
+    # تمرير تاريخ المحادثة كاملًا
+    formatted = classifier_prompt.format_messages(
+        messages="\n".join([m.content for m in messages[:-1]]),
+        input=content
+    )
     result = structured_llm.invoke(formatted)
 
     logger.info(f"Classifier from query: intent={result.intent}, section={result.section}, page={result.page_hint}")
@@ -236,7 +243,10 @@ def ask_paper_node(state: PaperState):
     # page = state.get("page_hint")
 
     context = search_paper(query, section_filter=None, page_hint=None)
-
+    if not context:
+        print("❌ [ask_paper] لم يتم العثور على سياق")
+    else:
+        print(f"✅ [ask_paper] سياق مسترجع: {len(context)} حرف")
     formatted = ask_paper_prompt.format_messages(context=context, query=query)
     response = llm.invoke(formatted)
     print(f"\n📄 [ask_paper] question: {query}")
@@ -374,11 +384,14 @@ def critic_node(state: PaperState):
     )
 
     
+    
     result = structured_llm.invoke(formatted)
     if result.approved:
         logger.info("--- Critic: Approved ---")
+        print(f" [Critic] Approved: {result.feedback}")
         return {"final_answer": draft, "critique": None}
     else:
         # logger.info(f"--- Critic: Rejected - {result.feedback[:100]} ---")
         logger.info(f"--- Critic: Rejected - {result.feedback[:100] if result.feedback else 'No feedback'} ---")
+        print(f"❌ [Critic] Rejected: {result.feedback}")
         return {"critique": result.feedback, "revision_number": state.get("revision_number", 0) + 1}

@@ -66,7 +66,35 @@ class Retriever:
         else:
             print("   ⚠️ لا توجد نتائج.")
         return results
-
+    def rerank(self, query, initial_results, top_k=5):
+        if not initial_results["documents"] or not initial_results["documents"][0]:
+            return []
+        docs = initial_results["documents"][0]
+        metadatas = initial_results["metadatas"][0]
+    
+        print(f"\n🔁 [Rerank] جاري إعادة ترتيب {len(docs)} قطعة باستخدام Cohere...")
+        response = self.co_client.rerank(
+            model="rerank-english-v3.0",
+            query=query,
+            documents=docs,
+          top_n=top_k
+        )
+        final_results = []
+        for res in response.results:
+            idx = res.index
+            meta = metadatas[idx]
+            section = meta.get("section", "?")
+            page = meta.get("page", "?")
+            snippet = docs[idx][:100].replace('\n', ' ')
+            print(f"   🎯 المرتبة {len(final_results)+1}: score={res.relevance_score:.4f}, page={page}, section='{section}' | {snippet}...")
+            final_results.append({
+             "text": docs[idx], 
+                "metadata": meta,
+                "score": res.relevance_score
+            })
+    
+        print(f"✅ [Rerank] اكتملت إعادة الترتيب، أفضل {len(final_results)} نتيجة\n")
+        return final_results
     # def rerank(self, query, initial_results, top_k=5):
     #     if not initial_results["documents"] or not initial_results["documents"][0]:
     #         return []
@@ -78,32 +106,32 @@ class Retriever:
     #         documents=docs,
     #         top_n=top_k
     #     )
-        # final_results = []
-        # for res in response.results:
-        #     idx = res.index
-        #     final_results.append({
-        #         "text": docs[idx],
-        #         "metadata": metadatas[idx],
-        #         "score": res.relevance_score
-        #     })
-        # return final_results
-    def rerank(self, query, initial_results, top_k=5):
-    # إذا لم تكن هناك نتائج، أرجع قائمة فارغة
-        if not initial_results["documents"] or not initial_results["documents"][0]:
-            return []
+    #     final_results = []
+    #     for res in response.results:
+    #         idx = res.index
+    #         final_results.append({
+    #             "text": docs[idx],
+    #             "metadata": metadatas[idx],
+    #             "score": res.relevance_score
+    #         })
+    #     return final_results
+    # def rerank(self, query, initial_results, top_k=5):
+    # # إذا لم تكن هناك نتائج، أرجع قائمة فارغة
+    #     if not initial_results["documents"] or not initial_results["documents"][0]:
+    #         return []
     
-    # بدلاً من استدعاء Cohere، نأخذ أول top_k من النتائج الأولية
-        docs = initial_results["documents"][0]
-        metadatas = initial_results["metadatas"][0]
+    # # بدلاً من استدعاء Cohere، نأخذ أول top_k من النتائج الأولية
+    #     docs = initial_results["documents"][0]
+    #     metadatas = initial_results["metadatas"][0]
     
-        final_results = []
-        for i in range(min(top_k, len(docs))):
-            final_results.append({
-                "text": docs[i],
-                "metadata": metadatas[i],
-                "score": 1.0  # قيمة افتراضية
-         })
-        return final_results
+    #     final_results = []
+    #     for i in range(min(top_k, len(docs))):
+    #         final_results.append({
+    #             "text": docs[i],
+    #             "metadata": metadatas[i],
+    #             "score": 1.0  # قيمة افتراضية
+    #      })
+    #     return final_results
     def get_available_sections(self):
         from backend.utils import get_available_sections
         return get_available_sections(self.collection)

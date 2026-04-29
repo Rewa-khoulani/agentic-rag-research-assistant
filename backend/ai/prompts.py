@@ -1,4 +1,5 @@
-# from langchain_core.prompts import ChatPromptTemplate
+
+from langchain_core.prompts import ChatPromptTemplate
 
 # classifier_prompt = ChatPromptTemplate.from_messages([
 #     ("system", """You are an intent classifier for a research paper assistant.
@@ -16,55 +17,28 @@
 # Return as JSON with intent, section (or null), page_hint (or null)."""),
 #     ("user", "{input}")
 # ])
-
-# paper_qa_prompt = ChatPromptTemplate.from_messages([
-#     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
-# If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible."""),
-#     ("user", "Context:\n{context}\n\nQuestion: {query}")
-# ])
-
-# locate_paragraph_prompt = ChatPromptTemplate.from_messages([
-#     ("system", """You are an expert at explaining academic text. The user has asked about a specific paragraph from the paper.
-# Provide a clear, detailed explanation of that paragraph in simple terms. Include the key points and their significance."""),
-#     ("user", "Paragraph text:\n{context}\n\nUser question: {query}")
-# ])
-
-# full_summary_prompt = ChatPromptTemplate.from_messages([
-#     ("system", """You are an expert at summarizing research papers. The user wants a comprehensive summary.
-# Use the provided context (which covers the entire paper broken into sections) to produce a structured summary.
-# Include: Introduction, Methodology, Key Findings, Discussion, and Conclusion. Cite section names."""),
-#     ("user", "Paper content by section:\n{context}\n\nSummarize the paper in detail.")
-# ])
-
-# web_merge_prompt = ChatPromptTemplate.from_messages([
-#     ("system", """You are an expert research assistant. The user asked about a concept that is not fully explained in the paper.
-# You have information from the web. Combine the web information with the paper's context to give a comprehensive answer.
-# Mention that the explanation comes from external sources."""),
-#     ("user", "Paper context: {paper_context}\n\nWeb information: {web_data}\n\nQuestion: {query}")
-# ])
-
-# critic_prompt = ChatPromptTemplate.from_messages([
-#     ("system", """You are a strict reviewer. Check if the draft answer accurately addresses the user's question using ONLY the provided sources.
-# If the answer is accurate and complete, approve it. Otherwise, provide specific critique on what is missing or incorrect."""),
-#     ("user", "Question: {query}\nDraft Answer: {draft}\nSources: {sources_summary}")
-# ])
-from langchain_core.prompts import ChatPromptTemplate
-
 classifier_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an intent classifier for a research paper assistant.
-Analyze the user's question and determine the intent from these options:
-- 'locate_paragraph': User asks to explain a specific paragraph (mentions page number or quotes text).
-- 'full_summary': User asks for a complete summary/explanation of the whole paper.
-- 'paper_qa': User asks a general question that can be answered from the paper's content.
-- 'external_concept': User asks about a term/concept not explained in the paper, requiring web search.
-- 'chat': Casual conversation or out-of-scope question.
+Analyze the user's question AND the conversation history to determine the intent.
+
+Consider:
+- If the user asks a follow-up question based on the assistant's previous answer, it's still 'general_qa'.
+- If the user asks about a specific paragraph/section previously mentioned, use 'locate_paragraph'.
+- If the user asks for a full summary of the paper, use 'full_summary'.
+
+Intent options:
+- 'locate_paragraph': Explain a specific paragraph (may mention page number or quote text)
+- 'full_summary': Complete summary/explanation of the whole paper
+- 'ask_paper': General question about the paper's content
+- 'external_concept': Concept not explained in the paper, requiring web search
+- 'chat': Casual conversation or out-of-scope question
 
 Also extract:
-- section: The section mentioned (e.g., 'Methodology', 'Results').
-- page_hint: Page number if explicitly mentioned.
+- section: The section mentioned (e.g., 'Methodology', 'Results')
+- page_hint: Page number if explicitly mentioned
 
 Return as JSON with intent, section (or null), page_hint (or null)."""),
-    ("user", "{input}")
+    ("user", "Conversation history:\n{messages}\n\nUser question: {input}")
 ])
 
 ask_paper_prompt = ChatPromptTemplate.from_messages([
