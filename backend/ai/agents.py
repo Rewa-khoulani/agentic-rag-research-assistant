@@ -156,7 +156,7 @@ from backend.core.llm import llm
 # from backend.core import llm
 from backend.ai.state import PaperState, TeamState
 from backend.ai.prompts import (
-    classifier_prompt, paper_qa_prompt, locate_paragraph_prompt,
+    classifier_prompt, ask_paper_prompt, locate_paragraph_prompt,
     full_summary_prompt, web_merge_prompt, critic_prompt
 )
 
@@ -169,7 +169,7 @@ logger = logging.getLogger(__name__)
 
 # ------------------- Classifier Node -------------------
 class IntentClassification(BaseModel):
-    intent: Literal["locate_paragraph", "full_summary", "paper_qa", "external_concept", "chat"]
+    intent: Literal["locate_paragraph", "full_summary", "ask_paper ", "external_concept", "chat"]
     section: Optional[str] = Field(None, description="The section mentioned in the query, if any")
     page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
 
@@ -229,18 +229,18 @@ def chatbot_node(state: TeamState):
     return {"messages": [response]}
 
 # ------------------- Paper QA Agent (RAG) -------------------
-def paper_qa_node(state: PaperState):
+def ask_paper_node(state: PaperState):
     logger.info(f"--- Paper QA: answering question ---")
     query = state["query"]
-    section = state.get("section_filter")
-    page = state.get("page_hint")
+    # section = state.get("section_filter")
+    # page = state.get("page_hint")
 
-    context = search_paper(query, section_filter=section, page_hint=page)
+    context = search_paper(query, section_filter=None, page_hint=None)
 
-    formatted = paper_qa_prompt.format_messages(context=context, query=query)
+    formatted = ask_paper_prompt.format_messages(context=context, query=query)
     response = llm.invoke(formatted)
-    print(f"\n📄 [Paper QA] question: {query}")
-    print(f"   section_filter = {section}, page_hint = {page}")
+    print(f"\n📄 [ask_paper] question: {query}")
+    # print(f"   section_filter = {section}, page_hint = {page}")
     return {"draft_answer": response.content, "retrieved_context": context}
 
 # ------------------- Locate Paragraph Node -------------------
@@ -331,6 +331,8 @@ def full_summary_node(state: PaperState):
         "- Key findings and results\n"
         "- Discussion and implications\n"
         "- Conclusion\n\n"
+        # f"User request: {query}\n\n" 
+        # "Important: Strictly follow the user request above.\n\n" 
         f"Section summaries:\n{combined_summaries}\n\n"
         "Final Summary:"
     )

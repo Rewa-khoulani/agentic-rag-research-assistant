@@ -3,7 +3,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from backend.ai.state import PaperState, TeamState
 from backend.ai.agents import (
-    classifier_node, chatbot_node, paper_qa_node,
+    classifier_node, chatbot_node, ask_paper_node,
     locate_paragraph_node, full_summary_node, external_concept_node, critic_node
 )
 
@@ -11,15 +11,15 @@ from backend.ai.agents import (
 def build_paper_graph(intent: str):
     workflow = StateGraph(PaperState)
 
-    if intent == "paper_qa":
-        workflow.add_node("paper_qa", paper_qa_node)
+    if intent == "ask_paper":
+        workflow.add_node("ask_paper", ask_paper_node)
         workflow.add_node("critic", critic_node)
-        workflow.set_entry_point("paper_qa")
-        workflow.add_edge("paper_qa", "critic")
+        workflow.set_entry_point("ask_paper")
+        workflow.add_edge("ask_paper", "critic")
         workflow.add_conditional_edges(
             "critic",
-            lambda s: END if s.get("final_answer") else "paper_qa",
-            {"paper_qa": "paper_qa", END: END}
+            lambda s: END if s.get("final_answer") else "ask_paper",
+            {"ask_paper": "ask_paper", END: END}
         )
     elif intent == "locate_paragraph":
         workflow.add_node("locate", locate_paragraph_node)
@@ -97,7 +97,7 @@ def build_master_graph():
 
     def router(state: TeamState):
         nxt = state["next_step"]
-        if nxt in ["paper_qa", "locate_paragraph", "full_summary", "external_concept"]:
+        if nxt in ["ask_paper", "locate_paragraph", "full_summary", "external_concept"]:
             return "paper_team"
         else:
             return "chatbot"

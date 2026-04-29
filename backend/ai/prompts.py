@@ -67,7 +67,7 @@ Return as JSON with intent, section (or null), page_hint (or null)."""),
     ("user", "{input}")
 ])
 
-paper_qa_prompt = ChatPromptTemplate.from_messages([
+ask_paper_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
 If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible."""),
     ("user", "Context:\n{context}\n\nQuestion: {query}")
@@ -101,12 +101,12 @@ locate_paragraph_prompt = ChatPromptTemplate.from_messages([
   Your response MUST follow this EXACT structure:
   
   1. **Main Thesis**: ONE sentence stating what the paragraph is about.
-  2. **Key Points** (MANDATORY bullet list):
+  2. **Key Points**  (3 bullet points MAXIMUM):
      • [Point 1]: State a key idea and explain its significance.
      • [Point 2]: State another key idea and explain its significance.
      • [Continue as needed]
   3. **Connections**: ONE short sentence explaining how these points relate to each other.
-  
+   Keep each bullet point to ONE sentence. Be concise.
 - If the question asks for a **summary** (e.g., "summarize", "give me a summary"), write ONE short paragraph capturing the core message.
 
 DO NOT write a general overview. NEVER just rephrase the entire paragraph. If the user asks for an explanation, you MUST use the structure above."""),
@@ -116,8 +116,16 @@ DO NOT write a general overview. NEVER just rephrase the entire paragraph. If th
 full_summary_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert at summarizing research papers. The user wants a comprehensive summary.
 Use the provided context (which covers the entire paper broken into sections) to produce a structured summary.
-Include: Introduction, Methodology, Key Findings, Discussion, and Conclusion. Cite section names."""),
-    ("user", "Paper content by section:\n{context}\n\nSummarize the paper in detail.")
+Include: Introduction, Methodology, Key Findings, Discussion, and Conclusion. Cite section names.
+     **CRITICAL**: The user may specify additional constraints You MUST respect their request strictly.
+     """
+    
+    
+     ),
+    (
+        # "user", "User request: {query}\n\nPaper content by section:\n{context}\n\nSummarize the paper in detail."
+        "user", "Paper content by section:\n{context}\n\nSummarize the paper in detail."
+     )
 ])
 
 web_merge_prompt = ChatPromptTemplate.from_messages([
