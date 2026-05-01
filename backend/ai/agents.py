@@ -170,7 +170,7 @@ logger = logging.getLogger(__name__)
 
 # ------------------- Classifier Node -------------------
 class IntentClassification(BaseModel):
-    intent: Literal["locate_paragraph", "full_summary", "ask_paper ", "external_concept", "chat"]
+    intent: Literal["locate_paragraph", "full_summary", "ask_paper", "external_concept", "chat"]
     section: Optional[str] = Field(None, description="The section mentioned in the query, if any")
     page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
 
@@ -216,7 +216,7 @@ def classifier_node(state: TeamState):
     print(f"   section (from query) = {result.section}, page_hint = {result.page_hint}")
     print(f"   manual section = {manual_section}, manual page = {manual_page}")
     print(f"   FINAL section = {final_section}, page = {final_page}\n")
-
+    print(f"\n🔙 [Classifier] سيعيد: next_step='{result.intent}', section_filter='{final_section}', page_hint='{final_page}'")
     if not state.get("paper_loaded") and result.intent != "chat":
         return {
             "next_step": "chat",
@@ -236,23 +236,35 @@ def chatbot_node(state: TeamState):
     return {"messages": [response]}
 
 # ------------------- Paper QA Agent (RAG) -------------------
+# def ask_paper_node(state: PaperState):
+#     logger.info(f"--- Paper QA: answering question ---")
+#     query = state["query"]
+#     # section = state.get("section_filter")
+#     # page = state.get("page_hint")
+
+#     context = search_paper(query, section_filter=None, page_hint=None)
+#     if not context:
+#         print("❌ [ask_paper] لم يتم العثور على سياق")
+#     else:
+#         print(f"✅ [ask_paper] سياق مسترجع: {len(context)} حرف")
+#     formatted = ask_paper_prompt.format_messages(context=context, query=query)
+#     response = llm.invoke(formatted)
+#     print(f"\n📄 [ask_paper] question: {query}")
+#     # print(f"   section_filter = {section}, page_hint = {page}")
+#     return {"draft_answer": response.content, "retrieved_context": context}
 def ask_paper_node(state: PaperState):
+    print("\n📄📄📄 [ask_paper_node] تم استدعاء الوكيل 📄📄📄")
     logger.info(f"--- Paper QA: answering question ---")
     query = state["query"]
-    # section = state.get("section_filter")
-    # page = state.get("page_hint")
-
     context = search_paper(query, section_filter=None, page_hint=None)
     if not context:
-        print("❌ [ask_paper] لم يتم العثور على سياق")
+        print("❌ [ask_paper] context فارغ!")
     else:
-        print(f"✅ [ask_paper] سياق مسترجع: {len(context)} حرف")
+        print(f"📄 [ask_paper] context length = {len(context)}")
     formatted = ask_paper_prompt.format_messages(context=context, query=query)
     response = llm.invoke(formatted)
     print(f"\n📄 [ask_paper] question: {query}")
-    # print(f"   section_filter = {section}, page_hint = {page}")
     return {"draft_answer": response.content, "retrieved_context": context}
-
 # ------------------- Locate Paragraph Node -------------------
 # def locate_paragraph_node(state: PaperState):
 #     logger.info(f"--- Locate Paragraph: finding specific paragraph ---")
@@ -372,6 +384,16 @@ class CriticOutput(BaseModel):
     approved: bool
     feedback: Optional[str] = None
 
+# def critic_node(state: PaperState):
+#     draft = state.get("draft_answer", "")
+#     query = state["query"]
+#     context = state.get("retrieved_context", "") + state.get("raw_data", "")
+#     structured_llm = llm.with_structured_output(CriticOutput)
+#     formatted = critic_prompt.format_messages(
+#         query=query,
+#         draft=draft,
+#         sources_summary=context[:1000]
+#     )
 def critic_node(state: PaperState):
     draft = state.get("draft_answer", "")
     query = state["query"]
@@ -382,16 +404,24 @@ def critic_node(state: PaperState):
         draft=draft,
         sources_summary=context[:1000]
     )
-
-    
-    
     result = structured_llm.invoke(formatted)
     if result.approved:
         logger.info("--- Critic: Approved ---")
-        print(f" [Critic] Approved: {result.feedback}")
+        print("✅ [Critic] تمت الموافقة")
         return {"final_answer": draft, "critique": None}
     else:
-        # logger.info(f"--- Critic: Rejected - {result.feedback[:100]} ---")
         logger.info(f"--- Critic: Rejected - {result.feedback[:100] if result.feedback else 'No feedback'} ---")
-        print(f"❌ [Critic] Rejected: {result.feedback}")
+        print(f"❌ [Critic] مرفوض: {result.feedback}")
         return {"critique": result.feedback, "revision_number": state.get("revision_number", 0) + 1}
+    
+    
+    # result = structured_llm.invoke(formatted)
+    # if result.approved:
+    #     logger.info("--- Critic: Approved ---")
+    #     print(f" [Critic] Approved: {result.feedback}")
+    #     return {"final_answer": draft, "critique": None}
+    # else:
+    #     # logger.info(f"--- Critic: Rejected - {result.feedback[:100]} ---")
+    #     logger.info(f"--- Critic: Rejected - {result.feedback[:100] if result.feedback else 'No feedback'} ---")
+    #     print(f"❌ [Critic] Rejected: {result.feedback}")
+    #     return {"critique": result.feedback, "revision_number": state.get("revision_number", 0) + 1}

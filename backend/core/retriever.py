@@ -10,7 +10,6 @@ class Retriever:
         self.chroma_client = chromadb.PersistentClient(path=str(CHROMA_PERSIST_DIR))
         self.co_client = cohere.Client(COHERE_API_KEY or os.getenv("COHERE_API_KEY"))
         self.collection = None
-
     def create_collection(self, chunks, collection_name=COLLECTION_NAME):
         try:
             self.chroma_client.delete_collection(collection_name)
@@ -38,7 +37,53 @@ class Retriever:
             embeddings=embeddings,
             metadatas=metadatas
         )
+
+        # --- إضافة أسماء الأقسام كوثائق منفصلة للبحث التلقائي ---
+        section_names = list(set(
+            c["section"] for c in chunks 
+            if c.get("section") and c["section"] != "General"
+        ))
+        if section_names:
+            section_embeddings = self.embedding_model.encode(section_names)
+            section_ids = [f"section_{i}" for i in range(len(section_names))]
+            section_metadatas = [{"doc_type": "section_label", "section": s} for s in section_names]
+            self.collection.add(
+                ids=section_ids,
+                documents=section_names,
+                embeddings=section_embeddings.tolist(),
+                metadatas=section_metadatas
+            )
+            print(f"🏷️ تم تخزين {len(section_names)} أقسام كعلامات للبحث التلقائي.")
+
         return self.collection
+    # def create_collection(self, chunks, collection_name=COLLECTION_NAME):
+    #     try:
+    #         self.chroma_client.delete_collection(collection_name)
+    #     except:
+    #         pass
+    #     self.collection = self.chroma_client.create_collection(collection_name)
+
+    #     ids = []
+    #     documents = []
+    #     embeddings = []
+    #     metadatas = []
+
+    #     for i, chunk in enumerate(chunks):
+    #         ids.append(str(i))
+    #         documents.append(chunk["text"])
+    #         embeddings.append(self.embedding_model.encode(chunk["text"]).tolist())
+    #         metadatas.append({
+    #             "page": str(chunk.get("page", "N/A")),
+    #             "section": chunk.get("section", "General")
+    #         })
+
+    #     self.collection.add(
+    #         ids=ids,
+    #         documents=documents,
+    #         embeddings=embeddings,
+    #         metadatas=metadatas
+    #     )
+    #     return self.collection
 
     def load_collection(self, collection_name=COLLECTION_NAME):
         self.collection = self.chroma_client.get_collection(collection_name)
