@@ -5,193 +5,142 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import Document as LlamaDocument
 import re
 import pdfplumber
-
-from config import CHUNK_SIZE, CHUNK_OVERLAP
+import os
+from config import CHUNK_SIZE, CHUNK_OVERLAP,LLAMA_CLOUD_API_KEY
 from backend.utils import (
     is_table_line,
     table_to_text,
     add_section_metadata,
     apply_overlap_to_chunks
 )
+# from liteparse import LiteParse
 
-
-
-
-
-# from langchain_opendataloader_pdf import OpenDataLoaderPDFLoader
-# from langchain_core.documents import Document
-# from typing import List
-
-# def load_pdf_as_documents(pdf_file: str) -> List[Document]:
-#     """
-#     تستخدم OpenDataLoader PDF لاستخراج النص من ملف PDF بصيغة Markdown.
-#     هذا يعطي نتائج أفضل بكثير للجداول والعناوين وهيكل المستند.
-#     """
-#     print(f"📄 جاري استخراج النص باستخدام OpenDataLoader PDF...")
+# def _load_with_liteparse(pdf_path: str) -> List[Document]:
+#     print("⚡ جاري استخراج النص باستخدام LiteParse...")
     
-#     try:
-#         # استخدام markdown format للحصول على أفضل جودة للعناوين والجداول
-#         loader = OpenDataLoaderPDFLoader(
-#             file_path=pdf_file,
-#             format="markdown",        # Markdown يحافظ على العناوين والجداول
-#             split_pages=True,         # يقسم المستند إلى صفحات منفصلة
-#             reading_order="xycut",    # خوارزمية XY-Cut++ للقراءة الصحيحة متعددة الأعمدة
-#             table_method="default",   # تعرف على الجداول بناءً على الحدود
-#             quiet=False               # إظهار سجل التقدم
-#         )
-        
-#         documents = loader.load()
-#         print(f"✅ تم استخراج {len(documents)} صفحة باستخدام OpenDataLoader PDF")
-        
-#         # تأكد من أن كل وثيقة تحمل metadata صحيح لرقم الصفحة
-#         for i, doc in enumerate(documents):
-#             if 'page' not in doc.metadata:
-#                 doc.metadata['page'] = i + 1
-        
-#         return documents
-        
-#     except Exception as e:
-#         print(f"⚠️ فشل OpenDataLoader PDF: {e}")
-#         print("🔄 العودة إلى PyMuPDF4LLM كخيار احتياطي...")
-#         return _load_with_pymupdf4llm(pdf_file)
-
-
-# def _load_with_pymupdf4llm(pdf_file: str) -> List[Document]:
-#     """خيار احتياطي: استخراج النص باستخدام PyMuPDF4LLM."""
-#     import pymupdf4llm
-#     import fitz
+#     from liteparse import LiteParse
+#     parser = LiteParse()
+#     result = parser.parse(pdf_path)
     
-#     pdf_document = fitz.open(pdf_file)
-#     documents = []
-#     for page_num in range(len(pdf_document)):
-#         try:
-#             page_md = pymupdf4llm.to_markdown(pdf_file, pages=[page_num])
-#         except TypeError:
-#             page = pdf_document[page_num]
-#             page_md = page.get_text()
-#         documents.append(Document(
-#             text=page_md,
-#             metadata={"page": page_num + 1}
-#         ))
+#     # LiteParse قد تُرجع النص في سمة markdown أو text
+#     markdown_text = getattr(result, 'markdown', None) or getattr(result, 'text', '')
+    
+#     if not markdown_text or not markdown_text.strip():
+#         # طباعة محتوى الكائن للمساعدة على التشخيص
+#         print("⚠️ لم يتم العثور على نص. محتوى الكائن:")
+#         print(dir(result))
+#         print("العودة إلى PyMuPDF4LLM...")
+#         return _load_with_pymupdf4llm(pdf_path)
+    
+#     print(f"📄 تم استخراج {len(markdown_text)} حرف باستخدام LiteParse")
+#     print(f"   معاينة أول 300 حرف:\n{markdown_text[:50000]}...")
+    
+#     documents = [Document(page_content=markdown_text, metadata={"page": 1})]
 #     return documents
 
-# def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
-#     print("Documents received:", len(documents))
-#     splitter = SentenceSplitter(
-#         chunk_size=chunk_size,
-#         chunk_overlap=chunk_overlap
+
+
+
+
+
+
+
+
+
+
+
+
+# from marker.converters.pdf import PdfConverter
+# from marker.models import create_model_dict
+# from marker.config.parser import ConfigParser
+
+# def _load_with_marker(pdf_path: str) -> List[Document]:
+#     print("⚡ جاري استخراج النص باستخدام Marker...")
+#     config_parser = ConfigParser()
+#     converter = PdfConverter(
+#         config=config_parser.generate_config_dict(),
+#         artifact_dict=create_model_dict(),
+#         processor_list=config_parser.get_processors(),
+#         renderer=config_parser.get_renderer()
 #     )
-#     all_chunks = []
+#     rendered = converter(pdf_path)
+#     markdown_text = rendered.markdown
 
-#     for doc in documents:
-#         # ---------- توافق مع LangChain Document و llama_index Document ----------
-#         text = getattr(doc, 'page_content', None) or getattr(doc, 'text', '')
-#         page_num = doc.metadata.get("page") or doc.metadata.get("page_label", 0)
+#     if not markdown_text.strip():
+#         raise ValueError("أعادت Marker نصًا فارغًا")
 
-#         # ---------- طباعة النص المستخرج من الصفحة ----------
-#         print(f"\n📄 الصفحة {page_num} – إجمالي الأحرف: {len(text)}")
-#         print("-" * 50)
-#         print(text[:3000])  # أول 300 حرف كمعاينة
-#         if len(text) > 300:
-#             print("...")
-#         print("-" * 50)
+    # Marker لا يُرجع صفحات منفصلة افتراضيًا، لذا نتعامل مع الناتج كمستند واحد.
+    # لكن smart_chunking ستعالج المحتوى وتُضيف metadata لاحقًا.
+    # للحصول على أرقام صفحات دقيقة، يمكننا استخدام rendered.blocks لكنه معقد.
+    # نكتفي بصفحة واحدة الآن، حيث أن رقم الصفحة ليس ضروريًا لعملية الاسترجاع (يمكننا إضافته لاحقًا).
+    # documents = [Document(page_content=markdown_text, metadata={"page": 1})]
+    # print(f"✅ تم استخراج النص بنجاح باستخدام Marker (مستند واحد يحتوي كل الصفحات)")
+    # return documents
 
-#         lines = text.split('\n')
-#         current_paragraph = ""
-#         inside_table = False
-#         table_buffer = ""
-#         post_table = False
 
-#         for line in lines:
-#             # --- التعرف على بداية جدول ---
-#             is_table = is_table_line(line) or line.strip().startswith('|') or '<table>' in line.lower()
-#             if is_table:
-#                 inside_table = True
-#                 table_buffer += line + "\n"
-#                 post_table = False
-#                 continue
+# from typing import List
+# from llama_cloud.client import LlamaCloud
+# from llama_cloud.types import ParseOutputFormat
 
-#             # --- الخروج من الجدول ---
-#             elif inside_table:
-#                 table_text = table_buffer.strip()
-#                 structured_table = table_to_text(table_text)
-#                 if not structured_table.strip():
-#                     structured_table = table_text
-#                 all_chunks.append({
-#                     "text": structured_table,
-#                     "page": page_num,
-#                     "type": "table"
-#                 })
-#                 table_buffer = ""
-#                 inside_table = False
-#                 post_table = True
+# ... (باقي الاستيرادات كما هي)
 
-#             # --- انتظار تسمية بعد الجدول ---
-#             if post_table:
-#                 if not line.strip():
-#                     continue
-#                 if re.match(r'(Table|Figure|جدول|شكل)\s*[\dIVX]+[:.]', line, re.IGNORECASE):
-#                     caption = line.strip()
-#                     if all_chunks and all_chunks[-1]["type"] == "table":
-#                         all_chunks[-1]["text"] += "\n" + caption
-#                     post_table = False
-#                     continue
-#                 else:
-#                     post_table = False
+# import os
+# from typing import List
+# from langchain_core.documents import Document
+# from llama_parse import LlamaParse
 
-#             # --- عنوان ---
-#             is_heading = re.match(r'^\s*#{1,6}\s+', line)
-#             if is_heading:
-#                 if current_paragraph.strip():
-#                     estimated_tokens = len(current_paragraph.split()) * 1.3
-#                     if estimated_tokens <= chunk_size:
-#                         all_chunks.append({"text": current_paragraph.strip(), "page": page_num})
-#                     else:
-#                         _split_and_add(current_paragraph, page_num, splitter, chunk_size, all_chunks)
-#                 current_paragraph = line
-#                 continue
 
-#             # --- سطر عادي (يُضاف للفقرة الحالية) ---
-#             if current_paragraph:
-#                 current_paragraph += "\n" + line
-#             else:
-#                 current_paragraph = line
+# def _load_with_llamaparse(pdf_path: str) -> List[Document]:
+#     print("☁️  جاري استخراج النص باستخدام LlamaParse...")
+    
+#     parser = LlamaParse(
+#         api_key=os.getenv("LLAMA_CLOUD_API_KEY"),
+#         result_type="markdown",
+#         num_workers=4,
+#         tier="premium",
+#         # do_not_unroll_columns=True,  # <-- تعطيل فرد الأعمدة
+#         # parsing_instructions="This document contains multi-column text and tables. Extract all text in correct reading order.",
+#         verbose=False
+#     )
+    
+#     # هذه الدالة تعيد قائمة من الكائنات
+#     parsed_docs = parser.load_data(pdf_path)
+    
+#     if not parsed_docs:
+#         raise ValueError("أعادت LlamaParse نتيجة فارغة")
+    
+#     documents = []
+#     for i, doc in enumerate(parsed_docs):
+#         if doc.text.strip():
+#             print(f"\n📄 النص المستخرج من الصفحة {i+1}:\n{'='*40}")
+#             print(doc.text)
+#             print(f"{'='*40}\n")
+#             documents.append(Document(
+#                 page_content=doc.text,
+#                 metadata={"page": i + 1}
+#             ))
+    
+#     print(f"✅ تم استخراج {len(documents)} صفحة باستخدام LlamaParse")
+#     return documents
 
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens > chunk_size * 1.2:
-#                 _split_and_add(current_paragraph, page_num, splitter, chunk_size, all_chunks)
-#                 current_paragraph = ""
 
-#         # --- نهاية الصفحة: أي جدول متبقٍ ---
-#         if inside_table and table_buffer.strip():
-#             structured_table = table_to_text(table_buffer)
-#             all_chunks.append({
-#                 "text": structured_table,
-#                 "page": page_num,
-#                 "type": "table"
-#             })
 
-#         # --- الفقرة المتبقية ---
-#         if current_paragraph.strip():
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens <= chunk_size * 1.2:
-#                 all_chunks.append({"text": current_paragraph.strip(), "page": page_num})
-#             else:
-#                 _split_and_add(current_paragraph, page_num, splitter, chunk_size, all_chunks)
 
-#     return all_chunks
-# # تبع لانغ تشين 
-
-# # دالة مساعدة لاستخراج القطع من الفقرات الطويلة
-
-# def _split_and_add(text, page_num, splitter, chunk_size, all_chunks):
-#     temp_doc = LlamaDocument(text=text, metadata={"page": page_num})
-#     nodes = splitter.get_nodes_from_documents([temp_doc])
-#     chunk_list = [{"text": node.text, "page": page_num} for node in nodes]
-#     if len(chunk_list) > 1:
-#         chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=20)
-#     all_chunks.extend(chunk_list)
-
+def _load_with_pymupdf4llm(pdf_path: str) -> List[Document]:
+    """الطريقة المحلية الافتراضية (الاحتياطية)."""
+    pdf_document = fitz.open(pdf_path)
+    documents = []
+    for page_num in range(len(pdf_document)):
+        try:
+            page_md = pymupdf4llm.to_markdown(pdf_path, pages=[page_num])
+        except TypeError:
+            page = pdf_document[page_num]
+            page_md = page.get_text()
+        documents.append(Document(
+            page_content=page_md,
+            metadata={"page": page_num + 1}
+        ))
+    return documents
 
 def load_pdf_as_documents(pdf_file):
     pdf_document = fitz.open(pdf_file)
@@ -207,507 +156,7 @@ def load_pdf_as_documents(pdf_file):
         print(f"  ( text ):\n{doc.text}")    
     return documents
 
-# def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
-#     print("Documents received:", len(documents))
-#     splitter = SentenceSplitter(
-#         chunk_size=chunk_size,
-#         chunk_overlap=chunk_overlap
-#     )
-#     all_chunks = []
 
-#     for doc in documents:
-#         page_num = doc.metadata.get("page", doc.metadata.get("page_label"))
-#         text = doc.text
-#         lines = text.split('\n')
-#         current_paragraph = ""
-#         inside_table = False
-#         table_buffer = ""
-
-#         for line in lines:
-#             if is_table_line(line):
-#                 inside_table = True
-#                 table_buffer += line + "\n"
-#                 continue
-#             elif inside_table:
-#                 table_text = table_buffer.strip()
-#                 structured_table = table_to_text(table_text)
-#                 all_chunks.append({
-#                     "text": structured_table,
-#                     "page": page_num,
-#                     "type": "table"
-#                 })
-#                 table_buffer = ""
-#                 inside_table = False
-
-#             is_heading = re.match(r'^\s*#{1,6}\s+', line)
-#             if is_heading:
-#                 if current_paragraph.strip():
-#                     estimated_tokens = len(current_paragraph.split()) * 1.3
-#                     if estimated_tokens <= chunk_size:
-#                         all_chunks.append({
-#                             "text": current_paragraph.strip(),
-#                             "page": page_num
-#                         })
-#                     else:
-#                         temp_doc = LlamaDocument(
-#                             text=current_paragraph,
-#                             metadata={"page": page_num}
-#                         )
-#                         nodes = splitter.get_nodes_from_documents([temp_doc])
-#                         chunk_list = [{
-#                             "text": node.text,
-#                             "page": page_num
-#                         } for node in nodes]
-#                         if len(chunk_list) > 1:
-#                             chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-#                         all_chunks.extend(chunk_list)
-#                 current_paragraph = line
-#                 continue
-
-#             if current_paragraph:
-#                 current_paragraph += "\n" + line
-#             else:
-#                 current_paragraph = line
-
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens > chunk_size * 1.5:
-#                 temp_doc = LlamaDocument(
-#                     text=current_paragraph,
-#                     metadata={"page": page_num}
-#                 )
-#                 nodes = splitter.get_nodes_from_documents([temp_doc])
-#                 chunk_list = [{
-#                     "text": node.text,
-#                     "page": page_num
-#                 } for node in nodes]
-#                 if len(chunk_list) > 1:
-#                     chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-#                 all_chunks.extend(chunk_list)
-#                 current_paragraph = ""
-
-#         # if inside_table and table_buffer.strip():
-#         #     structured_table = table_to_text(table_buffer)
-#         #     all_chunks.append({
-#         #         "text": structured_table,
-#         #         "page": page_num,
-#         #         "type": "table"
-#         #     })
-#             elif inside_table:
-#                 # انتهى الجدول
-#                 table_text = table_buffer.strip()
-#                 structured_table = table_to_text(table_text)
-
-#                 # ---------- التقاط التسمية التوضيحية (Caption) ----------
-#                 caption = None
-#                 # نمط يطابق "Table 1:", "الجدول 2:", "Table III." إلخ
-#                 if re.match(r'^(Table|جدول)\s*[\dIVX]+[:.]', line, re.IGNORECASE):
-#                     caption = line.strip()
-#                     # ضم التسمية إلى نص الجدول
-#                     structured_table += "\n" + caption
-
-#                 # إضافة الجدول كقطعة مستقلة
-#                 all_chunks.append({
-#                     "text": structured_table,
-#                     "page": page_num,
-#                     "type": "table"
-#                 })
-
-#                 # إعادة تعيين المتغيرات
-#                 table_buffer = ""
-#                 inside_table = False
-
-#                 # إذا التقطنا تسمية، نتجاوز هذا السطر (لا يُضاف للفقرة الحالية)
-#                 if caption:
-#                     continue
-#                 # وإلا، سيكمل الكود طبيعياً ليعالج السطر الحالي أسفله
-#         if current_paragraph.strip():
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens <= chunk_size:
-#                 all_chunks.append({
-#                     "text": current_paragraph.strip(),
-#                     "page": page_num
-#                 })
-#             else:
-#                 temp_doc = LlamaDocument(
-#                     text=current_paragraph,
-#                     metadata={"page": page_num}
-#                 )
-#                 nodes = splitter.get_nodes_from_documents([temp_doc])
-#                 chunk_list = [{
-#                     "text": node.text,
-#                     "page": page_num
-#                 } for node in nodes]
-#                 if len(chunk_list) > 1:
-#                     chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-#                 all_chunks.extend(chunk_list)
-#     return all_chunks
-# def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
-    # print("Documents received:", len(documents))
-    # splitter = SentenceSplitter(
-    #     chunk_size=chunk_size,
-    #     chunk_overlap=chunk_overlap
-    # )
-    # all_chunks = []
-
-    # for doc in documents:
-    #     page_num = doc.metadata.get("page", doc.metadata.get("page_label"))
-    #     text = doc.text
-    #     lines = text.split('\n')
-    #     current_paragraph = ""
-    #     inside_table = False
-    #     table_buffer = ""
-
-    #     for line in lines:
-    #         if is_table_line(line):
-    #             inside_table = True
-    #             table_buffer += line + "\n"
-    #             continue
-    #         elif inside_table:
-    #             # انتهى الجدول
-    #             table_text = table_buffer.strip()
-    #             structured_table = table_to_text(table_text)
-
-    #             # ---------- التقاط التسمية التوضيحية (Caption) ----------
-    #             caption = None
-    #             # نمط يطابق "Table 1:", "الجدول 2:", "Table III." إلخ
-    #             if re.match(r'^(Table|جدول)\s*[\dIVX]+[:.]', line, re.IGNORECASE):
-    #                 caption = line.strip()
-    #                 # ضم التسمية إلى نص الجدول
-    #                 structured_table += "\n" + caption
-
-    #             # إضافة الجدول كقطعة مستقلة
-    #             all_chunks.append({
-    #                 "text": structured_table,
-    #                 "page": page_num,
-    #                 "type": "table"
-    #             })
-
-    #             # إعادة تعيين المتغيرات
-    #             table_buffer = ""
-    #             inside_table = False
-
-    #             # إذا التقطنا تسمية، نتجاوز هذا السطر (لا يُضاف للفقرة الحالية)
-    #             if caption:
-    #                 continue
-    #             # وإلا، سيكمل الكود طبيعياً ليعالج السطر الحالي أسفله
-
-    #         is_heading = re.match(r'^\s*#{1,6}\s+', line)
-    #         if is_heading:
-    #             if current_paragraph.strip():
-    #                 estimated_tokens = len(current_paragraph.split()) * 1.3
-    #                 if estimated_tokens <= chunk_size:
-    #                     all_chunks.append({
-    #                         "text": current_paragraph.strip(),
-    #                         "page": page_num
-    #                     })
-    #                 else:
-    #                     temp_doc = LlamaDocument(
-    #                         text=current_paragraph,
-    #                         metadata={"page": page_num}
-    #                     )
-    #                     nodes = splitter.get_nodes_from_documents([temp_doc])
-    #                     chunk_list = [{
-    #                         "text": node.text,
-    #                         "page": page_num
-    #                     } for node in nodes]
-    #                     if len(chunk_list) > 1:
-    #                         chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #                     all_chunks.extend(chunk_list)
-    #             current_paragraph = line
-    #             continue
-
-    #         if current_paragraph:
-    #             current_paragraph += "\n" + line
-    #         else:
-    #             current_paragraph = line
-
-    #         estimated_tokens = len(current_paragraph.split()) * 1.3
-    #         if estimated_tokens > chunk_size * 1.5:
-    #             temp_doc = LlamaDocument(
-    #                 text=current_paragraph,
-    #                 metadata={"page": page_num}
-    #             )
-    #             nodes = splitter.get_nodes_from_documents([temp_doc])
-    #             chunk_list = [{
-    #                 "text": node.text,
-    #                 "page": page_num
-    #             } for node in nodes]
-    #             if len(chunk_list) > 1:
-    #                 chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #             all_chunks.extend(chunk_list)
-    #             current_paragraph = ""
-
-    #     # معالجة نهاية الصفحة (كما هي سابقاً)
-    #     if current_paragraph.strip():
-    #         estimated_tokens = len(current_paragraph.split()) * 1.3
-    #         if estimated_tokens <= chunk_size:
-    #             all_chunks.append({
-    #                 "text": current_paragraph.strip(),
-    #                 "page": page_num
-    #             })
-    #         else:
-    #             temp_doc = LlamaDocument(
-    #                 text=current_paragraph,
-    #                 metadata={"page": page_num}
-    #             )
-    #             nodes = splitter.get_nodes_from_documents([temp_doc])
-    #             chunk_list = [{
-    #                 "text": node.text,
-    #                 "page": page_num
-    #             } for node in nodes]
-    #             if len(chunk_list) > 1:
-    #                 chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #             all_chunks.extend(chunk_list)
-
-    # return all_chunks
-# def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
-    # print("Documents received:", len(documents))
-    # splitter = SentenceSplitter(
-    #     chunk_size=chunk_size,
-    #     chunk_overlap=chunk_overlap
-    # )
-    # all_chunks = []
-
-    # for doc in documents:
-    #     page_num = doc.metadata.get("page", doc.metadata.get("page_label"))
-    #     text = doc.text
-    #     lines = text.split('\n')
-    #     current_paragraph = ""
-    #     inside_table = False
-    #     table_buffer = ""
-
-    #     for line in lines:
-    #         # ------ حالة جدول ------
-    #         if is_table_line(line):
-    #             inside_table = True
-    #             table_buffer += line + "\n"
-    #             continue
-
-    #         elif inside_table:
-    #             # انتهى الجدول
-    #             table_text = table_buffer.strip()
-    #             structured_table = table_to_text(table_text)
-    #             # أضف النص المنظّم للجدول إلى الفقرة الحالية (وليس كقطعة منفصلة)
-    #             if current_paragraph:
-    #                 current_paragraph += "\n\n" + structured_table
-    #             else:
-    #                 current_paragraph = structured_table
-    #             table_buffer = ""
-    #             inside_table = False
-    #             # تابع معالجة السطر الحالي (الذي ليس جزءاً من الجدول) كجزء من الفقرة
-    #             # لا تستخدم continue هنا، بل دع الكود يكمل بشكل طبيعي ليضيف السطر إلى current_paragraph
-
-    #         # ------ حالة عنوان ------
-    #         is_heading = re.match(r'^\s*#{1,6}\s+', line)
-    #         if is_heading:
-    #             if current_paragraph.strip():
-    #                 estimated_tokens = len(current_paragraph.split()) * 1.3
-    #                 if estimated_tokens <= chunk_size:
-    #                     all_chunks.append({
-    #                         "text": current_paragraph.strip(),
-    #                         "page": page_num
-    #                     })
-    #                 else:
-    #                     temp_doc = LlamaDocument(
-    #                         text=current_paragraph,
-    #                         metadata={"page": page_num}
-    #                     )
-    #                     nodes = splitter.get_nodes_from_documents([temp_doc])
-    #                     chunk_list = [{
-    #                         "text": node.text,
-    #                         "page": page_num
-    #                     } for node in nodes]
-    #                     if len(chunk_list) > 1:
-    #                         chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #                     all_chunks.extend(chunk_list)
-    #             # ابدأ فقرة جديدة بالعنوان
-    #             current_paragraph = line
-    #             continue
-
-    #         # ------ سطر عادي ------
-    #         if current_paragraph:
-    #             current_paragraph += "\n" + line
-    #         else:
-    #             current_paragraph = line
-
-    #         estimated_tokens = len(current_paragraph.split()) * 1.3
-    #         if estimated_tokens > chunk_size * 1.5:
-    #             temp_doc = LlamaDocument(
-    #                 text=current_paragraph,
-    #                 metadata={"page": page_num}
-    #             )
-    #             nodes = splitter.get_nodes_from_documents([temp_doc])
-    #             chunk_list = [{
-    #                 "text": node.text,
-    #                 "page": page_num
-    #             } for node in nodes]
-    #             if len(chunk_list) > 1:
-    #                 chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #             all_chunks.extend(chunk_list)
-    #             current_paragraph = ""
-
-    #     # بعد انتهاء الصفحة
-    #     if inside_table and table_buffer.strip():
-    #         structured_table = table_to_text(table_buffer)
-    #         # أضف الجدول المتبقي للفقرة الحالية
-    #         if current_paragraph:
-    #             current_paragraph += "\n\n" + structured_table
-    #         else:
-    #             current_paragraph = structured_table
-
-    #     if current_paragraph.strip():
-    #         estimated_tokens = len(current_paragraph.split()) * 1.3
-    #         if estimated_tokens <= chunk_size:
-    #             all_chunks.append({
-    #                 "text": current_paragraph.strip(),
-    #                 "page": page_num
-    #             })
-    #         else:
-    #             temp_doc = LlamaDocument(
-    #                 text=current_paragraph,
-    #                 metadata={"page": page_num}
-    #             )
-    #             nodes = splitter.get_nodes_from_documents([temp_doc])
-    #             chunk_list = [{
-    #                 "text": node.text,
-    #                 "page": page_num
-    #             } for node in nodes]
-    #             if len(chunk_list) > 1:
-    #                 chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-    #             all_chunks.extend(chunk_list)
-
-    # return all_chunks
-# def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
-#     print("Documents received:", len(documents))
-#     splitter = SentenceSplitter(
-#         chunk_size=chunk_size,
-#         chunk_overlap=chunk_overlap
-#     )
-#     all_chunks = []
-
-#     for doc in documents:
-#         page_num = doc.metadata.get("page", doc.metadata.get("page_label"))
-#         text = doc.text
-#         lines = text.split('\n')
-#         current_paragraph = ""
-#         inside_table = False
-#         table_buffer = ""
-
-#         for line in lines:
-#             if is_table_line(line):
-#                 inside_table = True
-#                 table_buffer += line + "\n"
-#                 continue
-
-#             elif inside_table:
-#                 # انتهى الجدول
-#                 table_text = table_buffer.strip()
-#                 structured_table = table_to_text(table_text)
-
-#                 # ---------- التقاط التسمية التوضيحية (Caption) ----------
-#                 caption = None
-#                 # نمط يطابق "Table 1:", "الجدول 2:", "Table III." إلخ
-#                 if re.match(r'^(Table|table)\s*[\dIVX]+[:.]', line, re.IGNORECASE):
-#                     caption = line.strip()
-#                     # ضم التسمية إلى نص الجدول
-#                     structured_table += "\n" + caption
-
-#                 # إضافة الجدول كقطعة مستقلة
-#                 all_chunks.append({
-#                     "text": structured_table,
-#                     "page": page_num,
-#                     "type": "table"
-#                 })
-
-#                 # إعادة تعيين المتغيرات
-#                 table_buffer = ""
-#                 inside_table = False
-
-#                 # إذا التقطنا تسمية، نتجاوز هذا السطر (لا يُضاف للفقرة الحالية)
-#                 if caption:
-#                     continue
-#                 # وإلا، سيكمل الكود طبيعياً ليعالج السطر الحالي أسفله
-
-#             # ------ حالة عنوان ------
-#             is_heading = re.match(r'^\s*#{1,6}\s+', line)
-#             if is_heading:
-#                 if current_paragraph.strip():
-#                     # ... (معالجة الفقرة الحالية مثل السابق)
-#                     estimated_tokens = len(current_paragraph.split()) * 1.3
-#                     if estimated_tokens <= chunk_size:
-#                         all_chunks.append({
-#                             "text": current_paragraph.strip(),
-#                             "page": page_num
-#                         })
-#                     else:
-#                         temp_doc = LlamaDocument(
-#                             text=current_paragraph,
-#                             metadata={"page": page_num}
-#                         )
-#                         nodes = splitter.get_nodes_from_documents([temp_doc])
-#                         chunk_list = [{
-#                             "text": node.text,
-#                             "page": page_num
-#                         } for node in nodes]
-#                         if len(chunk_list) > 1:
-#                             chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-#                         all_chunks.extend(chunk_list)
-#                 current_paragraph = line
-#                 continue
-
-#             # ------ سطر عادي ------
-#             if current_paragraph:
-#                 current_paragraph += "\n" + line
-#             else:
-#                 current_paragraph = line
-
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens > chunk_size * 1.5:
-#                 temp_doc = LlamaDocument(
-#                     text=current_paragraph,
-#                     metadata={"page": page_num}
-#                 )
-#                 nodes = splitter.get_nodes_from_documents([temp_doc])
-#                 chunk_list = [{
-#                     "text": node.text,
-#                     "page": page_num
-#                 } for node in nodes]
-#                 if len(chunk_list) > 1:
-#                     chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=2)
-#                 all_chunks.extend(chunk_list)
-#                 current_paragraph = ""
-
-#         # معالجة ما تبقى في نهاية الصفحة (جدول أخير + فقرة)
-#         if inside_table and table_buffer.strip():
-#             structured_table = table_to_text(table_buffer)
-#             all_chunks.append({
-#                 "text": structured_table,
-#                 "page": page_num,
-#                 "type": "table"
-#             })
-
-#         if current_paragraph.strip():
-#             estimated_tokens = len(current_paragraph.split()) * 1.3
-#             if estimated_tokens <= chunk_size:
-#                 all_chunks.append({
-#                     "text": current_paragraph.strip(),
-#                     "page": page_num
-#                 })
-#             else:
-#                 temp_doc = LlamaDocument(
-#                     text=current_paragraph,
-#                     metadata={"page": page_num}
-#                 )
-#                 nodes = splitter.get_nodes_from_documents([temp_doc])
-#                 chunk_list = [{
-#                     "text": node.text,
-#                     "page": page_num
-#                 } for node in nodes]
-#                 if len(chunk_list) > 1:
-#                     chunk_list = apply_overlap_to_chunks(chunk_list, overlap_size=50)
-#                 all_chunks.extend(chunk_list)
-
-#     return all_chunks
 def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP):
     print("Documents received:", len(documents))
     splitter = SentenceSplitter(
@@ -718,7 +167,9 @@ def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
 
     for doc in documents:
         page_num = doc.metadata.get("page", doc.metadata.get("page_label"))
-        text = doc.text
+        # text = doc.text
+
+        text = getattr(doc, 'text', None) or getattr(doc, 'page_content', '')
         lines = text.split('\n')
         current_paragraph = ""
         inside_table = False
@@ -851,6 +302,12 @@ def smart_chunking(documents, chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
 def process_paper(pdf_path: str):
     """الوظيفة الكاملة لمعالجة الورقة وإرجاع القطع مع البيانات الوصفية"""
     documents = load_pdf_as_documents(pdf_path)
+    # documents = _load_with_llamaparse(pdf_path)
+    # documents = _load_with_marker(pdf_path)
+    # documents = _load_with_liteparse(pdf_path)
+    
+
+
     chunks = smart_chunking(documents)
     chunks = add_section_metadata(chunks)
     print("\n" + "="*60)
