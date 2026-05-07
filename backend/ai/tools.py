@@ -6,7 +6,7 @@ from config import TAVILY_API_KEY
 import os
 from sklearn.metrics.pairwise import cosine_similarity
 tavily = TavilySearch(max_results=3, tavily_api_key=TAVILY_API_KEY or os.getenv("TAVILY_API_KEY"))
-
+from typing import List, Optional
 # ================== دوال البحث (بدون/مع Rerank) ==================
 
 def _search_paper_raw(query: str, section_filter: str = None, page_hint: int = None, top_k: int = 15) -> str:
@@ -62,17 +62,59 @@ def _search_paper_raw(query: str, section_filter: str = None, page_hint: int = N
 #         return context
 #     else:
 #         return _search_paper_raw(query, section_filter, page_hint, top_k=15)
+# def _search_paper(query: str, section_filter: str = None, page_hint: int = None, use_rerank: bool = True, top_k: int = 5) -> str:
+#     print(f"\n🔍 [_search_paper] query='{query[:100]}...', section_filter='{section_filter}', page_hint='{page_hint}', use_rerank={use_rerank}")
+#     if not section_filter:
+#         section_filter = _get_best_section_auto(query)
+#     if use_rerank:
+#         results = retriever.retrieve(query, top_k=15, section_filter=section_filter, page_filter=page_hint)
+#         print(f"   [_search_paper] عدد النتائج الأولية: {len(results.get('documents', [[]])[0])}")
+#         reranked = retriever.rerank(query, results, top_k=top_k)
+#         if not reranked:
+#             print("   ❌ [_search_paper] لا توجد نتائج بعد إعادة الترتيب")
+#             return "No relevant information found in the paper."
+#         context = "\n\n".join([
+#             f"[Page {r['metadata'].get('page', '?')} | {r['metadata'].get('section', 'General')}]\n{r['text']}"
+#             for r in reranked
+#         ])
+#         print(f"   ✅ [_search_paper] طول السياق النهائي: {len(context)} حرف")
+#         return context
+#     else:
+#         print("   ⚡ [_search_paper] استخدام الوضع الخام (بدون Rerank)")
+#         return _search_paper_raw(query, section_filter, page_hint, top_k=15)
 def _search_paper(query: str, section_filter: str = None, page_hint: int = None, use_rerank: bool = True, top_k: int = 5) -> str:
     print(f"\n🔍 [_search_paper] query='{query[:100]}...', section_filter='{section_filter}', page_hint='{page_hint}', use_rerank={use_rerank}")
+    
+    sections_to_search = []
     if not section_filter:
-        section_filter = _get_best_section_auto(query)
+        sections_to_search = _get_best_sections_auto(query)
+    
     if use_rerank:
-        results = retriever.retrieve(query, top_k=15, section_filter=section_filter, page_filter=page_hint)
-        print(f"   [_search_paper] عدد النتائج الأولية: {len(results.get('documents', [[]])[0])}")
-        reranked = retriever.rerank(query, results, top_k=top_k)
-        if not reranked:
-            print("   ❌ [_search_paper] لا توجد نتائج بعد إعادة الترتيب")
+        all_docs = []
+        all_metas = []
+        
+        if sections_to_search:
+            for sec in sections_to_search:
+                results = retriever.retrieve(query, top_k=10, section_filter=sec, page_filter=page_hint)
+                if results["documents"] and results["documents"][0]:
+                    all_docs.extend(results["documents"][0])
+                    all_metas.extend(results["metadatas"][0])
+        else:
+            results = retriever.retrieve(query, top_k=15, section_filter=section_filter, page_filter=page_hint)
+            if results["documents"] and results["documents"][0]:
+                all_docs = results["documents"][0]
+                all_metas = results["metadatas"][0]
+        
+        if not all_docs:
+            print("   ❌ [_search_paper] لا توجد نتائج أولية")
             return "No relevant information found in the paper."
+        
+        print(f"   [_search_paper] عدد النتائج الأولية المجمعة: {len(all_docs)}")
+        
+        reranked = retriever.rerank(query, {"documents": [all_docs], "metadatas": [all_metas]}, top_k=top_k)
+        if not reranked:
+            return "No relevant information found in the paper."
+        
         context = "\n\n".join([
             f"[Page {r['metadata'].get('page', '?')} | {r['metadata'].get('section', 'General')}]\n{r['text']}"
             for r in reranked
@@ -80,7 +122,6 @@ def _search_paper(query: str, section_filter: str = None, page_hint: int = None,
         print(f"   ✅ [_search_paper] طول السياق النهائي: {len(context)} حرف")
         return context
     else:
-        print("   ⚡ [_search_paper] استخدام الوضع الخام (بدون Rerank)")
         return _search_paper_raw(query, section_filter, page_hint, top_k=15)
 
 def _web_search(query: str) -> str:
@@ -89,69 +130,90 @@ def _web_search(query: str) -> str:
 def _get_paper_sections() -> str:
     sections = retriever.get_available_sections()
     return "Available sections: " + ", ".join(sections)
-# def _get_best_section_auto(query: str, threshold: float = 0.6) -> Optional[str]:
+def _get_best_sections_auto(query: str, threshold: float = 0.6) -> List[str]:
+    try:
+        all_section_results = retriever.collection.get(where={"doc_type": "section_label"})
+        if not all_section_results["documents"]:
+            print("⚠️ لا توجد تسميات أقسام مخزنة.")
+            return []
+        
+        section_names = all_section_results["documents"]
+        response = retriever.co_client.rerank(
+            model="rerank-english-v3.0",
+            query=query,
+            documents=section_names,
+            top_n=len(section_names)
+        )
+        
+        scored = [(res.relevance_score, section_names[res.index]) for res in response.results]
+        scored.sort(key=lambda x: x[0], reverse=True)
+        
+        print(f"\n📊 [Auto-filter] ترتيب الأقسام حسب Reranker (Cohere):")
+        for score, sec in scored[:5]:
+            print(f"   {sec}: {score:.4f}")
+        
+        best_sections = [sec for score, sec in scored if score >= threshold]
+        if best_sections:
+            print(f"🎯 [Auto-filter] تم اختيار {len(best_sections)} أقسام: {best_sections}")
+            return best_sections
+        else:
+            print(f"🔸 [Auto-filter] لا توجد أقسام تتجاوز العتبة ({threshold})")
+            return []
+    except Exception as e:
+        print(f"⚠️ فشل البحث عن أفضل قسم: {e}")
+        return []
+# def _get_best_section_auto(query: str, threshold: float = 0.5) -> Optional[str]:
 #     """
 #     استخدام ChromaDB للعثور على أفضل اسم قسم مطابق للاستعلام.
 #     تُستخدم فقط إذا لم يحدد المستخدم قسمًا يدويًا.
 #     """
 #     try:
 #         query_emb = retriever.embedding_model.encode(query).tolist()
-#         results = retriever.collection.query(
-#             query_embeddings=[query_emb],
-#             n_results=1,
-#             where={"doc_type": "section_label"}
-#         )
-#         if results["documents"] and results["documents"][0]:
-#             best_section = results["documents"][0][0]
-#             # حساب تشابه cosine يدويًا لتطبيق العتبة
-#             best_emb = retriever.embedding_model.encode(best_section)
-#             similarity = cosine_similarity([query_emb], [best_emb.tolist()])[0][0]
-#             if similarity >= threshold:
-#                 print(f"🎯 [Auto-filter] تم اختيار القسم '{best_section}' تلقائيًا (تشابه: {similarity:.3f})")
-#                 return best_section
-#             else:
-#                 print(f"🔸 [Auto-filter] أفضل قسم هو '{best_section}' لكن التشابه ({similarity:.3f}) أقل من العتبة ({threshold})")
+#         # جلب جميع تسميات الأقسام من المجموعة
+#         all_section_results = retriever.collection.get(where={"doc_type": "section_label"})
+#         if not all_section_results["documents"]:
+#             print("⚠️ لا توجد تسميات أقسام مخزنة.")
+#             return None
+        
+#         section_names = all_section_results["documents"]
+#         # حساب تضمينات الأقسام
+#         section_embs = retriever.embedding_model.encode(section_names)
+#         # حساب التشابه
+#         similarities = cosine_similarity([query_emb], section_embs)[0]
+        
+#         # ترتيب الأقسام حسب التشابه
+#         sorted_idxs = similarities.argsort()[::-1]  # تنازليًا
+#         print(f"\n📊 [Auto-filter] تشابه الاستعلام مع الأقسام:")
+#         for i in sorted_idxs[:5]:  # عرض أفضل 5 أقسام
+#             print(f"   {section_names[i]}: {similarities[i]:.3f}")
+        
+#         best_idx = sorted_idxs[0]
+#         best_section = section_names[best_idx]
+#         best_score = similarities[best_idx]
+        
+#         if best_score >= threshold:
+#             print(f"🎯 [Auto-filter] تم اختيار القسم '{best_section}' تلقائيًا (تشابه: {best_score:.3f})")
+#             return best_section
+#         else:
+#             print(f"🔸 [Auto-filter] أفضل قسم هو '{best_section}' لكن التشابه ({best_score:.3f}) أقل من العتبة ({threshold})")
+#             return None
 #     except Exception as e:
 #         print(f"⚠️ فشل البحث عن أفضل قسم: {e}")
-#     return None
-def _get_best_section_auto(query: str, threshold: float = 0.5) -> Optional[str]:
-    """
-    استخدام ChromaDB للعثور على أفضل اسم قسم مطابق للاستعلام.
-    تُستخدم فقط إذا لم يحدد المستخدم قسمًا يدويًا.
-    """
-    try:
-        query_emb = retriever.embedding_model.encode(query).tolist()
-        # جلب جميع تسميات الأقسام من المجموعة
-        all_section_results = retriever.collection.get(where={"doc_type": "section_label"})
-        if not all_section_results["documents"]:
-            print("⚠️ لا توجد تسميات أقسام مخزنة.")
-            return None
-        
-        section_names = all_section_results["documents"]
-        # حساب تضمينات الأقسام
-        section_embs = retriever.embedding_model.encode(section_names)
-        # حساب التشابه
-        similarities = cosine_similarity([query_emb], section_embs)[0]
-        
-        # ترتيب الأقسام حسب التشابه
-        sorted_idxs = similarities.argsort()[::-1]  # تنازليًا
-        print(f"\n📊 [Auto-filter] تشابه الاستعلام مع الأقسام:")
-        for i in sorted_idxs[:5]:  # عرض أفضل 5 أقسام
-            print(f"   {section_names[i]}: {similarities[i]:.3f}")
-        
-        best_idx = sorted_idxs[0]
-        best_section = section_names[best_idx]
-        best_score = similarities[best_idx]
-        
-        if best_score >= threshold:
-            print(f"🎯 [Auto-filter] تم اختيار القسم '{best_section}' تلقائيًا (تشابه: {best_score:.3f})")
-            return best_section
-        else:
-            print(f"🔸 [Auto-filter] أفضل قسم هو '{best_section}' لكن التشابه ({best_score:.3f}) أقل من العتبة ({threshold})")
-            return None
-    except Exception as e:
-        print(f"⚠️ فشل البحث عن أفضل قسم: {e}")
-        return None
+#         return None
+    
+def sort_chunks_by_chunk_id(initial_results):
+    """تأخذ نتائج الاسترجاع الأولية وتعيد النصوص مرتبة حسب chunk_id."""
+    if not initial_results.get("documents") or not initial_results["documents"][0]:
+        return []
+    
+    docs = initial_results["documents"][0]
+    metas = initial_results["metadatas"][0]
+    combined = list(zip(docs, metas))
+    
+    # فرز حسب chunk_id (الترتيب الأصلي للقطعة)
+    combined.sort(key=lambda x: int(x[1].get("chunk_id", 0)))
+    
+    return [item[0] for item in combined], [item[1] for item in combined]
 # ================== أدوات LangChain ==================
 
 @tool

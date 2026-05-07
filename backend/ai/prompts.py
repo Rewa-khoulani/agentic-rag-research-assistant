@@ -41,9 +41,18 @@ Return as JSON with intent, section (or null), page_hint (or null)."""),
     ("user", "Conversation history:\n{messages}\n\nUser question: {input}")
 ])
 
+# ask_paper_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
+# If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible."""),
+#     ("user", "Context:\n{context}\n\nQuestion: {query}")
+# ])
 ask_paper_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
-If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible."""),
+
+CRITICAL: Provide a detailed explanation in your own words. Do NOT just repeat the section title.
+If the context contains only a heading or title, look deeper into the text that follows it.
+If the answer cannot be found, say 'Not found in the paper.'
+Cite page numbers when possible."""),
     ("user", "Context:\n{context}\n\nQuestion: {query}")
 ])
 
@@ -109,8 +118,18 @@ Mention that the explanation comes from external sources."""),
     ("user", "Paper context: {paper_context}\n\nWeb information: {web_data}\n\nQuestion: {query}")
 ])
 
+# critic_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """You are a strict reviewer. Check if the draft answer accurately addresses the user's question using ONLY the provided sources.
+# If the answer is accurate and complete, approve it. Otherwise, provide specific critique on what is missing or incorrect."""),
+#     ("user", "Question: {query}\nDraft Answer: {draft}\nSources: {sources_summary}")])
 critic_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are a strict reviewer. Check if the draft answer accurately addresses the user's question using ONLY the provided sources.
-If the answer is accurate and complete, approve it. Otherwise, provide specific critique on what is missing or incorrect."""),
+
+**Important Context-Aware Rule:**
+- If the question is about a **specific paragraph or section** (the user selected a section/page), the answer MUST only use the provided sources which are limited to that section. Do NOT reject the answer for missing information that is not in those sources. Approve it if it correctly reflects what is in the sources, even if it's brief.
+- For general questions (without section/page selection), demand comprehensive answers.
+
+If the answer is accurate and complete given its context, approve it. Otherwise, provide specific critique on what is missing or incorrect."""),
     ("user", "Question: {query}\nDraft Answer: {draft}\nSources: {sources_summary}")
+
 ])

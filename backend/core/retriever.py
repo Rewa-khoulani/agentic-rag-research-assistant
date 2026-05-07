@@ -89,7 +89,9 @@ class Retriever:
             embeddings.append(self.embedding_model.encode(chunk["text"]).tolist())
             metadatas.append({
                 "page": str(chunk.get("page", "N/A")),
-                "section": chunk.get("section", "General")
+                "section": chunk.get("section", "General"),
+                 "chunk_id": i
+                
             })
 
         self.collection.add(

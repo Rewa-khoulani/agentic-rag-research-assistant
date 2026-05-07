@@ -165,6 +165,7 @@ from backend.core.retriever import retriever
 from backend.ai.tools import _search_paper_raw
 # استيراد الدوال الأساسية مباشرة
 from backend.ai.tools import _search_paper as search_paper, _web_search as web_search, _get_paper_sections as get_paper_sections
+from backend.ai.tools import _search_paper_raw
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +175,29 @@ class IntentClassification(BaseModel):
     section: Optional[str] = Field(None, description="The section mentioned in the query, if any")
     page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
 
+import json
+import re
+
+def _format_structured_draft(draft: str) -> str:
+    """تحاول تحليل النص كـ JSON وإعادة تنسيقه إلى نص مقروء."""
+    try:
+        # محاولة استخراج JSON من النص (قد يكون محاطًا بنص آخر)
+        json_match = re.search(r'\{.*\}', draft, re.DOTALL)
+        if json_match:
+            data = json.loads(json_match.group())
+            # إذا احتوى على المفاتيح المحددة
+            if "Main Thesis" in data and "Key Points" in data:
+                parts = [f"**Main Thesis:** {data['Main Thesis']}"]
+                if data.get("Key Points"):
+                    parts.append("**Key Points:**")
+                    for point in data["Key Points"]:
+                        parts.append(f"- {point}")
+                if data.get("Connections"):
+                    parts.append(f"**Connections:** {data['Connections']}")
+                return "\n\n".join(parts)
+    except:
+        pass
+    return draft  # إذا فشل التحليل، يُرجع النص كما هو
 def classifier_node(state: TeamState):
      # إذا كانت هناك نية مجبرة (من الواجهة)، استخدمها فوراً
     forced = state.get("forced_intent")
@@ -263,28 +287,53 @@ def ask_paper_node(state: PaperState):
         print(f"📄 [ask_paper] context length = {len(context)}")
     formatted = ask_paper_prompt.format_messages(context=context, query=query)
     response = llm.invoke(formatted)
+    draft = _format_structured_draft(response.content)
     print(f"\n📄 [ask_paper] question: {query}")
-    return {"draft_answer": response.content, "retrieved_context": context}
+    return {"draft_answer": draft, "retrieved_context": context}
 # ------------------- Locate Paragraph Node -------------------
-# def locate_paragraph_node(state: PaperState):
-#     logger.info(f"--- Locate Paragraph: finding specific paragraph ---")
-#     query = state["query"]
-#     page = state.get("page_hint")
-#     context = search_paper(query, page_hint=page)
-#     formatted = locate_paragraph_prompt.format_messages(context=context, query=query)
-#     response = llm.invoke(formatted)
-#     print(f"\n🔎 [Locate Paragraph] question: {query}, page_hint = {page}")
-#     return {"draft_answer": response.content, "retrieved_context": context}
+
+from backend.ai.tools import _search_paper_raw, sort_chunks_by_chunk_id
+from backend.core.retriever import retriever
+
 def locate_paragraph_node(state: PaperState):
     logger.info(f"--- Locate Paragraph: finding specific paragraph ---")
     query = state["query"]
-    section = state.get("section_filter")   # ← أضف هذا
+    section = state.get("section_filter")
     page = state.get("page_hint")
-    context = search_paper(query, section_filter=section, page_hint=page)
+    
+    # جلب النتائج الخام (بدون ترتيب)
+    results = retriever.retrieve(query, top_k=15, section_filter=section, page_filter=page)
+    
+    # إعادة ترتيب حسب chunk_id
+    sorted_docs, sorted_metas = sort_chunks_by_chunk_id(results)
+    print("\n🔢 [Locate Paragraph] ترتيب القطع بعد الفرز بـ chunk_id:")
+    for i, (doc, meta) in enumerate(zip(sorted_docs, sorted_metas)):
+        chunk_id = meta.get("chunk_id", "?")
+        preview = doc[:300].replace('\n', ' ')
+        print(f"   {i+1}. chunk_id={chunk_id}, page={meta.get('page', '?')}, section='{meta.get('section', '?')}'")
+        print(f"      {preview}...\n")
+    # بناء السياق المرتب
+    context = "\n\n".join([
+        f"[Page {m.get('page', '?')} | {m.get('section', 'General')}]\n{t}"
+        for t, m in zip(sorted_docs, sorted_metas)
+    ]) if sorted_docs else "No relevant information found."
+    
     formatted = locate_paragraph_prompt.format_messages(context=context, query=query)
     response = llm.invoke(formatted)
+    draft = _format_structured_draft(response.content)
     print(f"\n🔎 [Locate Paragraph] question: {query}, page_hint = {page}, section_filter = {section}")
-    return {"draft_answer": response.content, "retrieved_context": context}
+    return {"draft_answer": draft, "retrieved_context": context}
+# def locate_paragraph_node(state: PaperState):
+#     logger.info(f"--- Locate Paragraph: finding specific paragraph ---")
+#     query = state["query"]
+#     section = state.get("section_filter")   # ← أضف هذا
+#     page = state.get("page_hint")
+#     context = search_paper(query, section_filter=section, page_hint=page)
+#     formatted = locate_paragraph_prompt.format_messages(context=context, query=query)
+#     response = llm.invoke(formatted)
+#     draft = _format_structured_draft(response.content)
+#     print(f"\n🔎 [Locate Paragraph] question: {query}, page_hint = {page}, section_filter = {section}")
+#     return {"draft_answer": draft, "retrieved_context": context}
 
 # ------------------- Full Summary Node -------------------
 
@@ -332,6 +381,7 @@ def full_summary_node(state: PaperState):
             f"Section: {sec}\nContent:\n{raw_context}\n\nSummary:"
         )
         partial_response = llm.invoke(partial_prompt)
+        
         partial_summary = partial_response.content
         print(f"📝 الملخص الجزئي لـ '{sec}':")
         print(partial_summary[:500] + ("..." if len(partial_summary) > 300 else ""))
@@ -359,8 +409,9 @@ def full_summary_node(state: PaperState):
         "Final Summary:"
     )
     final_response = llm.invoke(final_prompt)
+    draft = _format_structured_draft(final_response)
     return {
-        "draft_answer": final_response.content,
+        "draft_answer": draft,
         "retrieved_context": combined_summaries
     }
 
