@@ -41,20 +41,50 @@ Return as JSON with intent, section (or null), page_hint (or null)."""),
     ("user", "Conversation history:\n{messages}\n\nUser question: {input}")
 ])
 
+
 # ask_paper_prompt = ChatPromptTemplate.from_messages([
 #     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
-# If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible."""),
+# If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible.
+# **Provide a clear, direct answer in plain text – do NOT output JSON.**
+# **If the user asks a follow-up question, use the conversation history to understand the context.**"""),
+#     ("user", "Conversation history:\n{history}\n\nContext:\n{context}\n\nQuestion: {query}")
+# ])
+
+# ask_paper_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """
+# You are an expert research assistant.
+
+# Answer the question using ONLY the provided context from the paper.
+
+# If the answer cannot be found, say:
+# 'Not found in the paper.'
+
+# Cite page numbers when possible.
+
+# Return ONLY a plain natural language answer.
+# Do NOT output JSON.
+# Do NOT use dictionaries.
+# Do NOT use keys like 'answer'.
+# Do NOT use markdown or code blocks.
+# """),
+
 #     ("user", "Context:\n{context}\n\nQuestion: {query}")
 # ])
 ask_paper_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
-
-CRITICAL: Provide a detailed explanation in your own words. Do NOT just repeat the section title.
-If the context contains only a heading or title, look deeper into the text that follows it.
-If the answer cannot be found, say 'Not found in the paper.'
-Cite page numbers when possible."""),
+If the answer cannot be found, say 'Not found in the paper.' Cite page numbers when possible.
+**Provide a clear, direct answer in plain text – do NOT output JSON.**"""),
     ("user", "Context:\n{context}\n\nQuestion: {query}")
 ])
+# ask_paper_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """You are an expert research assistant. Answer the question using ONLY the provided context from the paper.
+
+# CRITICAL: Provide a detailed explanation in your own words. Do NOT just repeat the section title.
+# If the context contains only a heading or title, look deeper into the text that follows it.
+# If the answer cannot be found, say 'Not found in the paper.'
+# Cite page numbers when possible."""),
+#     ("user", "Context:\n{context}\n\nQuestion: {query}")
+# ])
 
 # locate_paragraph_prompt = ChatPromptTemplate.from_messages([
 #     ("system", """You are an expert at explaining academic text. The user has asked about a specific paragraph from the paper.
@@ -74,6 +104,7 @@ Cite page numbers when possible."""),
 # Whichever style you use, never add information from outside the provided paragraph."""),
 #     ("user", "Paragraph:\n{context}\n\nUser Question: {query}")
 # ])
+# **If the user asks a follow-up question, use the conversation history to understand the context.**
 locate_paragraph_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. You will receive a paragraph from a paper and a user question.
 
@@ -94,22 +125,59 @@ locate_paragraph_prompt = ChatPromptTemplate.from_messages([
 
 DO NOT write a general overview. NEVER just rephrase the entire paragraph. If the user asks for an explanation, you MUST use the structure above."""),
     ("user", "Paragraph:\n{context}\n\nUser Question: {query}")
+    #  ("user", "Conversation history:\n{history}\n\nParagraph:\n{context}\n\nQuestion: {query}")
 ])
-
 full_summary_prompt = ChatPromptTemplate.from_messages([
-    ("system", """You are an expert at summarizing research papers. The user wants a comprehensive summary.
-Use the provided context (which covers the entire paper broken into sections) to produce a structured summary.
-Include: Introduction, Methodology, Key Findings, Discussion, and Conclusion. Cite section names.
-     **CRITICAL**: The user may specify additional constraints You MUST respect their request strictly.
-     """
-    
-    
-     ),
     (
-        # "user", "User request: {query}\n\nPaper content by section:\n{context}\n\nSummarize the paper in detail."
-        "user", "Paper content by section:\n{context}\n\nSummarize the paper in detail."
-     )
+        "system",
+        """
+You are an expert research paper summarizer.
+
+Generate a comprehensive and well-structured summary of the paper using ONLY the provided context.
+
+Requirements:
+- Write the answer as normal readable text.
+- DO NOT use JSON.
+- DO NOT use dictionaries.
+- DO NOT wrap the answer with braces {}.
+- DO NOT return keys like "answer" or "summary".
+- Use clear academic writing.
+- Organize the summary into:
+  Introduction,
+  Methodology,
+  Key Findings,
+  Discussion,
+  Conclusion.
+
+If the user provides additional instructions, follow them strictly.
+"""
+    ),
+    (
+        "user",
+        """
+Paper content by section:
+
+{context}
+
+Provide a detailed summary of the paper.
+"""
+    )
 ])
+# full_summary_prompt = ChatPromptTemplate.from_messages([
+#     ("system", """You are an expert at summarizing research papers. The user wants a comprehensive summary.
+# Use the provided context (which covers the entire paper broken into sections) to produce a structured summary.
+# Include: Introduction, Methodology, Key Findings, Discussion, and Conclusion. Cite section names.
+#      **CRITICAL**: The user may specify additional constraints You MUST respect their request strictly.
+#      **Provide a clear, direct answer in plain text – do NOT output JSON.**
+#      """
+    
+    
+#      ),
+#     (
+#         # "user", "User request: {query}\n\nPaper content by section:\n{context}\n\nSummarize the paper in detail."
+#         "user", "Paper content by section:\n{context}\n\nSummarize the paper in detail."
+#      )
+# ])
 
 web_merge_prompt = ChatPromptTemplate.from_messages([
     ("system", """You are an expert research assistant. The user asked about a concept that is not fully explained in the paper.

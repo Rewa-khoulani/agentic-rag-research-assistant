@@ -35,11 +35,24 @@
 #     google_api_key=GOOGLE_API_KEY
 # )
 
-from langchain_ollama import ChatOllama
 
-llm = ChatOllama(
-    model="gemma2:2b ",
+from langchain_openai import ChatOpenAI
+from config import GHAYMAH_API_KEY
+
+# تهيئة نموذج Ghaymah عبر واجهة OpenAI المتوافقة
+llm = ChatOpenAI(
+    model="DeepSeek-V4-Flash",  # أو أي نموذج آخر متاح مثل "Qwen/Qwen3-32B"
     temperature=0,
-    format="json",           # مهم جداً لدعم with_structured_output
-    num_predict=2048,
+    api_key=GHAYMAH_API_KEY,
+    base_url="https://genai.ghaymah.systems",
+    # اختياري، لضبط طول الإجابة
 )
+
+# from langchain_ollama import ChatOllama
+
+# llm = ChatOllama(
+#     model="gemma2:2b ",
+#     temperature=0,
+#     format="json",           # مهم جداً لدعم with_structured_output
+#     num_predict=2048,
+# )

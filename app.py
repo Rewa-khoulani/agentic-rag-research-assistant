@@ -26,7 +26,7 @@ st.markdown("""
 }
 </style>
 """, unsafe_allow_html=True)
-
+# arXiv API
 st.markdown('<div class="main-title">📚 AI Research Paper Assistant</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Ask questions and explore research papers intelligently using RAG</div>', unsafe_allow_html=True)
 

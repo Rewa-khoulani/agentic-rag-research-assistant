@@ -842,7 +842,7 @@ def process_paper(pdf_path: str):
     chunks = smart_chunking(documents)
     chunks = add_section_metadata(chunks)
     print("\n" + "="*60)
-    print(f"📦 إجمالي القطع النهائية (بعد المعالجة الكاملة): {len(chunks)}")
+    print(f"📦    total chuncks: {len(chunks)}")
     print("="*60)
     for i, c in enumerate(chunks[:80 ]):  # يمكنك زيادة العدد أو استخدام len(chunks)
         print("="*40)

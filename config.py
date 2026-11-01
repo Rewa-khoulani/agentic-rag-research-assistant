@@ -17,6 +17,8 @@ HF_API_KEY = os.getenv("HF_TOKEN", "")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 LLAMA_CLOUD_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY", "")
 
+
+GHAYMAH_API_KEY = os.getenv("GHAYMAH_API_KEY", "")
 # Models
 EMBEDDING_MODEL_NAME = "allenai-specter"
 LLM_MODEL_NAME = "gpt-4o"  # أو أي نموذج OpenAI متوافق

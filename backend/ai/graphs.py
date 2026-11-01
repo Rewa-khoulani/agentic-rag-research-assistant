@@ -9,11 +9,11 @@ from backend.ai.agents import (
 from langgraph.checkpoint.memory import MemorySaver
 # ------------------- Sub-graph for Paper Processing -------------------
 def build_paper_graph(intent: str):
-    print(f"\n🏗️ بناء الرسم الفرعي للنية: {intent}")
+    print(f"\n🏗️  build paper graph for intent: {intent}")
     workflow = StateGraph(PaperState)
 
     if intent == "ask_paper":
-        print("   ✅ تم التعرف على ask_paper، إضافة العقد...")
+        # print("   ✅    ask_paper، إضافة العقد...")
         workflow.add_node("ask_paper", ask_paper_node)
         workflow.add_node("critic", critic_node)
         workflow.set_entry_point("ask_paper")
@@ -71,12 +71,12 @@ def build_paper_graph(intent: str):
 
 # ------------------- Paper Team Node (Wrapper for Sub-graph) -------------------
 def paper_team_node(state: TeamState):
-    print("\n🚀🚀🚀 [Paper Team] تم استدعاء paper_team_node 🚀🚀🚀")
+    print("\n🚀🚀🚀 [Paper Team]   paper_team_node 🚀🚀🚀")
    
     
     intent = state["next_step"]
     query = state["messages"][-1].content
-    print(f"   النية = {intent}, السؤال = {query[:100]}...")
+    print(f"   intent = {intent}, query = {query[:100]}...")
     paper_input = {
         "query": query,
         "section_filter": state.get("section_filter"),
@@ -88,8 +88,8 @@ def paper_team_node(state: TeamState):
     result = graph.invoke(paper_input)
 
     final = result.get("final_answer", "I couldn't generate an answer.")
-    print(f"\n🚀 [Paper Team] تشغيل الرسم الفرعي للنية: {intent}")
-    print(f"   السؤال: {query[:100]}...")
+    # print(f"\n🚀 [Paper Team] تشغيل الرسم الفرعي للنية: {intent}")
+    # print(f"   السؤال: {query[:100]}...")
     return {"final_response": final}
 
 # ------------------- Master Graph -------------------
@@ -106,10 +106,10 @@ def build_master_graph():
         nxt = state["next_step"]
         print(f"\n🧭 [Router] next_step = '{nxt}'")
         if nxt in ["ask_paper", "locate_paragraph", "full_summary", "external_concept"]:
-            print("   ➡️ التوجيه إلى paper_team")
+            print("   ➡️   paper_team")
             return "paper_team"
         else:
-            print("   ➡️ التوجيه إلى chatbot")
+            print("   ➡️   chatbot")
             return "chatbot"
 
     workflow.add_conditional_edges(
@@ -122,6 +122,6 @@ def build_master_graph():
     workflow.add_edge("paper_team", END)
     # return workflow.compile(checkpointer=InMemorySaver())
     memory = MemorySaver()
-    print("✅ تم بناء master_graph بنجاح مع الذاكرة.")
+    print("✅   master_graph with memory.")
     return workflow.compile(checkpointer=memory)
 master_graph = build_master_graph()

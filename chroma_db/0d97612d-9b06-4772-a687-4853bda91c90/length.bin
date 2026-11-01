@@ -1,0 +1,25 @@
+Method BERT-FiT has:
+- IMDb: 5.40
+- Yelp P.: 2.28
+- AG: 5.25
+- DBP: 0.71
+
+Method BERT-MFiT-FiT has:
+- IMDb: 5.36
+- Yelp P.: 2.19
+- AG: 5.20
+- DBP: 0.68
+
+Method BERT-CDPT-FiT has:
+- IMDb: 5.18
+- Yelp P.: **1.97**
+- AG: **5.08**
+- DBP: **0.67**
+
+Method BERT-CDPT-MFiT-FiT has:
+- IMDb: **4.96**
+- Yelp P.: 2.06
+- AG: 5.13
+- DBP: **0.67**
+
+Caption: Table 7: Test error rates (%) with multi-task finetunin

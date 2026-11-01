@@ -170,11 +170,14 @@ from backend.ai.tools import _search_paper_raw
 logger = logging.getLogger(__name__)
 
 # ------------------- Classifier Node -------------------
+# class IntentClassification(BaseModel):
+    # intent: Literal["locate_paragraph", "full_summary", "ask_paper", "external_concept", "chat"]
+    # section: Optional[str] = Field(None, description="The section mentioned in the query, if any")
+    # page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
 class IntentClassification(BaseModel):
-    intent: Literal["locate_paragraph", "full_summary", "ask_paper", "external_concept", "chat"]
-    section: Optional[str] = Field(None, description="The section mentioned in the query, if any")
-    page_hint: Optional[int] = Field(None, description="The page number mentioned, if any")
-
+    intent: Literal["ask_paper", "full_summary", "external_concept", "chat"]
+    section: Optional[str] = Field(None)
+    page_hint: Optional[int] = Field(None)
 import json
 import re
 
@@ -240,7 +243,7 @@ def classifier_node(state: TeamState):
     print(f"   section (from query) = {result.section}, page_hint = {result.page_hint}")
     print(f"   manual section = {manual_section}, manual page = {manual_page}")
     print(f"   FINAL section = {final_section}, page = {final_page}\n")
-    print(f"\n🔙 [Classifier] سيعيد: next_step='{result.intent}', section_filter='{final_section}', page_hint='{final_page}'")
+    print(f"\n🔙 [Classifier] return: next_step='{result.intent}', section_filter='{final_section}', page_hint='{final_page}'")
     if not state.get("paper_loaded") and result.intent != "chat":
         return {
             "next_step": "chat",
@@ -276,20 +279,48 @@ def chatbot_node(state: TeamState):
 #     print(f"\n📄 [ask_paper] question: {query}")
 #     # print(f"   section_filter = {section}, page_hint = {page}")
 #     return {"draft_answer": response.content, "retrieved_context": context}
+from backend.ai.tools import search_paper_hybrid
+
+
 def ask_paper_node(state: PaperState):
-    print("\n📄📄📄 [ask_paper_node] تم استدعاء الوكيل 📄📄📄")
     logger.info(f"--- Paper QA: answering question ---")
     query = state["query"]
-    context = search_paper(query, section_filter=None, page_hint=None)
+    print(f"\n📄 [ask_paper_node] question: {query}")
+    
+    # استخدام البحث الهجين بدلاً من search_paper القديمة
+    context = search_paper_hybrid(query, page_hint=None)
+    
     if not context:
-        print("❌ [ask_paper] context فارغ!")
+        return {"draft_answer": "No relevant information found.", "retrieved_context": ""}
+    messages = state.get("messages", [])
+    history = "\n".join([f"{'User' if m.type == 'human' else 'Assistant'}: {m.content}" for m in messages[:-1]])
+    print(f"\n📜 [ask_paper] history ({len(messages)-1}  messages):")
+    if history:
+        print(history)
     else:
-        print(f"📄 [ask_paper] context length = {len(context)}")
-    formatted = ask_paper_prompt.format_messages(context=context, query=query)
+        print("   (no conv   )")
+    # formatted = ask_paper_prompt.format_messages(context=context, query=query)
+    formatted = ask_paper_prompt.format_messages(history=history, context=context, query=query)
     response = llm.invoke(formatted)
-    draft = _format_structured_draft(response.content)
-    print(f"\n📄 [ask_paper] question: {query}")
+    draft = _format_structured_draft(response.content)   # تنسيق إن خرج JSON
+    # استخراج تاريخ المحادثة من الحالة
+    
     return {"draft_answer": draft, "retrieved_context": context}
+# def ask_paper_node(state: PaperState):
+#     print("\n📄📄📄 [ask_paper_node] تم استدعاء الوكيل 📄📄📄")
+#     logger.info(f"--- Paper QA: answering question ---")
+#     query = state["query"]
+#     context = search_paper_hybrid(query, page_hint=None)
+#     # context = search_paper(query, section_filter=None, page_hint=None)
+#     if not context:
+#         print("❌ [ask_paper] context فارغ!")
+#     else:
+#         print(f"📄 [ask_paper] context length = {len(context)}")
+#     formatted = ask_paper_prompt.format_messages(context=context, query=query)
+#     response = llm.invoke(formatted)
+#     draft = _format_structured_draft(response.content)
+#     print(f"\n📄 [ask_paper] question: {query}")
+#     return {"draft_answer": draft, "retrieved_context": context}
 # ------------------- Locate Paragraph Node -------------------
 
 from backend.ai.tools import _search_paper_raw, sort_chunks_by_chunk_id
@@ -306,7 +337,7 @@ def locate_paragraph_node(state: PaperState):
     
     # إعادة ترتيب حسب chunk_id
     sorted_docs, sorted_metas = sort_chunks_by_chunk_id(results)
-    print("\n🔢 [Locate Paragraph] ترتيب القطع بعد الفرز بـ chunk_id:")
+    print("\n🔢 [Locate Paragraph] order chunk chunk_id:")
     for i, (doc, meta) in enumerate(zip(sorted_docs, sorted_metas)):
         chunk_id = meta.get("chunk_id", "?")
         preview = doc[:300].replace('\n', ' ')
@@ -317,8 +348,15 @@ def locate_paragraph_node(state: PaperState):
         f"[Page {m.get('page', '?')} | {m.get('section', 'General')}]\n{t}"
         for t, m in zip(sorted_docs, sorted_metas)
     ]) if sorted_docs else "No relevant information found."
-    
-    formatted = locate_paragraph_prompt.format_messages(context=context, query=query)
+    # استخراج تاريخ المحادثة من الحالة
+    messages = state.get("messages", [])
+    history = "\n".join([f"{'User' if m.type == 'human' else 'Assistant'}: {m.content}" for m in messages[:-1]])
+    print(f"\n📜 [ask_paper] تاريخ المحادثة ({len(messages)-1} رسالة سابقة):")
+    if history:
+        print(history)
+    else:
+        print("   (no conv   )")
+    formatted = locate_paragraph_prompt.format_messages(context=context, query=query,history=history)
     response = llm.invoke(formatted)
     draft = _format_structured_draft(response.content)
     print(f"\n🔎 [Locate Paragraph] question: {query}, page_hint = {page}, section_filter = {section}")
@@ -339,9 +377,9 @@ def locate_paragraph_node(state: PaperState):
 
 def full_summary_node(state: PaperState):
     logger.info("--- Full Summary (Hierarchical) ---")
-    logger.info("=== بدء التلخيص الهرمي ===")
+    logger.info("===   start summarize ===")
     print("\n" + "="*50)
-    print("📋 بدء التلخيص الهرمي للورقة")
+    print("📋    start summarize for paper")
     print("="*50)
     # sections_str = get_paper_sections.invoke({})
     sections_str = get_paper_sections()
@@ -362,10 +400,10 @@ def full_summary_node(state: PaperState):
             print(f"📄 تقسيم الصفحات إلى {len(sections)} مجموعات: {sections}")
 
     # المرحلة 1: ملخصات جزئية
-    print("\n🔍 المرحلة 1: إنشاء ملخصات جزئية لكل قسم...")
+    print("\n🔍 level 1: create part sum for each sec")
     section_summaries = []
     for idx, sec in enumerate(sections, 1):     
-        print(f"\n--- القسم {idx}/{len(sections)}: '{sec}' ---")
+        print(f"\n--- sec {idx}/{len(sections)}: '{sec}' ---")
         # استخدام البحث بدون Rerank
         raw_context = _search_paper_raw(
             f"The main points, findings and conclusions of this section: {sec}",
@@ -374,7 +412,7 @@ def full_summary_node(state: PaperState):
         if not raw_context:
             print(f"⚠️ لا توجد نصوص مسترجعة للقسم '{sec}'، تخطي...")
             continue
-        print(f"📄 تم استرجاع {len(raw_context)} حرف للقسم '{sec}'")
+        print(f"📄 retreve  {len(raw_context)}  char '{sec}'")
         partial_prompt = (
             f"Summarize the following section of a research paper in one concise paragraph (2-3 sentences). "
             f"Focus on key objectives, methods, results, or conclusions.\n\n"
@@ -383,7 +421,7 @@ def full_summary_node(state: PaperState):
         partial_response = llm.invoke(partial_prompt)
         
         partial_summary = partial_response.content
-        print(f"📝 الملخص الجزئي لـ '{sec}':")
+        print(f"📝   partial summare of '{sec}':")
         print(partial_summary[:500] + ("..." if len(partial_summary) > 300 else ""))
         section_summaries.append(f"### {sec}\n{partial_response.content}")
         
@@ -458,11 +496,11 @@ def critic_node(state: PaperState):
     result = structured_llm.invoke(formatted)
     if result.approved:
         logger.info("--- Critic: Approved ---")
-        print("✅ [Critic] تمت الموافقة")
+        print("✅ [Critic]  accept")
         return {"final_answer": draft, "critique": None}
     else:
         logger.info(f"--- Critic: Rejected - {result.feedback[:100] if result.feedback else 'No feedback'} ---")
-        print(f"❌ [Critic] مرفوض: {result.feedback}")
+        print(f"❌ [Critic] reject: {result.feedback}")
         return {"critique": result.feedback, "revision_number": state.get("revision_number", 0) + 1}
     
     

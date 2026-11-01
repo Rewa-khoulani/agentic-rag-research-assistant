@@ -1,0 +1,2 @@
+This indicates the importance of optimal pairing of pre-trained models and fine-tuning tasks. 
+On average the CAMeLBERT-MSA model performs best, and is the winner in 10 out of 12 subtasks. The following are the two exceptions: (a) the CAMeLBERT-DA model performs best in the highly dialectal MADAR-6 subtask; and (b) the CAMeLBERT-CA model outperforms other models in the poetry classification task, 
