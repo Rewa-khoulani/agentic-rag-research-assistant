@@ -15,11 +15,20 @@ class Retriever:
         # self.documents_corpus = []   # نصوص كل القطع (بدون section_label)
         # self.bm25_index = None
     def __init__(self):
+
+        
+
+        # ... داخل __init__
+        persist_dir = "/tmp/chroma_db"          # مجلد مؤقت قابل للكتابة
+        os.makedirs(persist_dir, exist_ok=True) # إنشاء المجلد إن لم يكن موجوداً
+        os.chmod(persist_dir, 0o755)            # منح صلاحيات الكتابة[reference:2]
+
+        self.chroma_client = chromadb.PersistentClient(path=persist_dir)
         self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
-        self.chroma_client = chromadb.PersistentClient(
-            path=str(CHROMA_PERSIST_DIR)
-        )
+        # self.chroma_client = chromadb.PersistentClient(
+        #     path=str(CHROMA_PERSIST_DIR)
+        # )
 
         self.co_client = cohere.Client(
             COHERE_API_KEY or os.getenv("COHERE_API_KEY")
