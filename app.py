@@ -4,6 +4,28 @@ import tempfile
 import os
 import traceback
 
+# --- إصلاح موارد NLTK لبيئة Streamlit Cloud ---
+
+import nltk
+
+# إنشاء مجلد مؤقت قابل للكتابة
+nltk_data_dir = "/tmp/nltk_data"
+os.makedirs(nltk_data_dir, exist_ok=True)
+
+# توجيه NLTK إلى هذا المجلد
+os.environ["NLTK_DATA"] = nltk_data_dir
+if nltk_data_dir not in nltk.data.path:
+    nltk.data.path.insert(0, nltk_data_dir)
+
+# تنزيل الموارد المطلوبة (stopwords و punkt و punkt_tab)
+for resource in ["stopwords", "punkt", "punkt_tab"]:
+    try:
+        nltk.data.find(f"corpora/{resource}" if resource == "stopwords" else f"tokenizers/{resource}")
+    except LookupError:
+        nltk.download(resource, download_dir=nltk_data_dir, quiet=True)
+
+print("✅ NLTK resources are ready.")
+# --- نهاية إصلاح NLTK ---
 # =========================
 # Page Config + Styling
 # =========================
