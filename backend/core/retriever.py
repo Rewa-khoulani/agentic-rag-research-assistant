@@ -4,6 +4,8 @@ import cohere
 from config import CHROMA_PERSIST_DIR, COLLECTION_NAME, EMBEDDING_MODEL_NAME, COHERE_API_KEY
 import os
 from rank_bm25 import BM25Okapi
+import hashlib
+import time
 class Retriever:
     # def __init__(self):
         # self.embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
@@ -33,7 +35,12 @@ class Retriever:
 
         self.documents_corpus = []
         self.bm25_index = None
-    def create_collection(self, chunks, collection_name=COLLECTION_NAME):
+
+    
+    def create_collection(self, chunks, collection_name=None):
+        # دائماً ولّدي اسماً فريداً (تجاهلي ما يمرره app.py)
+        collection_name = f"papers_{hashlib.md5(str(time.time()).encode()).hexdigest()[:8]}"
+        print(f"📦 Creating collection: {collection_name}")
         try:
             self.chroma_client.delete_collection(collection_name)
         except:
