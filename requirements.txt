@@ -25,3 +25,4 @@ huggingface-hub
 langchain-ollama
 langchain-opendataloader-pdf
 rank_bm25
+pdfplumber
