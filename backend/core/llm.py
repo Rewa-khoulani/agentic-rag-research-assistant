@@ -17,16 +17,29 @@
 # )
 
 
-from langchain_huggingface import HuggingFaceEndpoint
-from config import HF_API_KEY
-import os
+# from langchain_huggingface import HuggingFaceEndpoint
+# from config import HF_API_KEY
+# import os
 
-llm = HuggingFaceEndpoint(
-    repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
-    max_new_tokens=512,
-    temperature=0.01,
-    huggingfacehub_api_token=HF_API_KEY or os.getenv("HF_TOKEN")
+# llm = HuggingFaceEndpoint(
+#     repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
+#     max_new_tokens=512,
+#     temperature=0.01,
+#     huggingfacehub_api_token=HF_API_KEY or os.getenv("HF_TOKEN")
+# )
+
+from langchain_openai import ChatOpenAI
+from config import GHAYMAH_API_KEY
+
+llm = ChatOpenAI(
+    model="DeepSeek-V3-0324",          # نموذج متاح في Ghaymah
+    temperature=0,
+    api_key=GHAYMAH_API_KEY,
+    base_url="https://genai.ghaymah.systems",
+    max_tokens=2048,
 )
+
+
 # from langchain_google_genai import ChatGoogleGenerativeAI
 # from config import GOOGLE_API_KEY
 # llm = ChatGoogleGenerativeAI(
