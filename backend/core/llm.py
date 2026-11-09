@@ -17,36 +17,36 @@
 # )
 
 
-# from langchain_huggingface import HuggingFaceEndpoint
-# from config import HF_API_KEY
-# import os
+from langchain_huggingface import HuggingFaceEndpoint
+from config import HF_API_KEY
+import os
 
-# llm = HuggingFaceEndpoint(
-#     repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
-#     max_new_tokens=512,
-#     temperature=0.01,
-#     huggingfacehub_api_token=HF_API_KEY or os.getenv("HF_TOKEN")
-# )
-# from langchain_google_genai import ChatGoogleGenerativeAI
-# from config import GOOGLE_API_KEY
-# llm = ChatGoogleGenerativeAI(
-#     model="gemini-2.5-flash-lite",
-#     temperature=0,
-#     google_api_key=GOOGLE_API_KEY
-# )
-
-
-from langchain_openai import ChatOpenAI
-from config import GHAYMAH_API_KEY
-
-# تهيئة نموذج Ghaymah عبر واجهة OpenAI المتوافقة
-llm = ChatOpenAI(
-    model="DeepSeek-V4-Flash",  # أو أي نموذج آخر متاح مثل "Qwen/Qwen3-32B"
-    temperature=0,
-    api_key=GHAYMAH_API_KEY,
-    base_url="https://genai.ghaymah.systems",
-    # اختياري، لضبط طول الإجابة
+llm = HuggingFaceEndpoint(
+    repo_id="meta-llama/Meta-Llama-3-8B-Instruct",
+    max_new_tokens=512,
+    temperature=0.01,
+    huggingfacehub_api_token=HF_API_KEY or os.getenv("HF_TOKEN")
 )
+from langchain_google_genai import ChatGoogleGenerativeAI
+from config import GOOGLE_API_KEY
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash-lite",
+    temperature=0,
+    google_api_key=GOOGLE_API_KEY
+)
+
+
+# from langchain_openai import ChatOpenAI
+# from config import GHAYMAH_API_KEY
+
+# # تهيئة نموذج Ghaymah عبر واجهة OpenAI المتوافقة
+# llm = ChatOpenAI(
+#     model="DeepSeek-V4-Flash",  # أو أي نموذج آخر متاح مثل "Qwen/Qwen3-32B"
+#     temperature=0,
+#     api_key=GHAYMAH_API_KEY,
+#     base_url="https://genai.ghaymah.systems",
+#     # اختياري، لضبط طول الإجابة
+# )
 
 # from langchain_ollama import ChatOllama
 
