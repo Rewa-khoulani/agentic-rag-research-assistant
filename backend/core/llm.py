@@ -32,7 +32,7 @@ from langchain_openai import ChatOpenAI
 from config import GHAYMAH_API_KEY
 
 llm = ChatOpenAI(
-    model="DeepSeek-V3-0324",          # نموذج متاح في Ghaymah
+    model="DeepSeek-V4-Flash",          # نموذج متاح في Ghaymah
     temperature=0,
     api_key=GHAYMAH_API_KEY,
     base_url="https://genai.ghaymah.systems",
